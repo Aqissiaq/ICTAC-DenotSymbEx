@@ -1,4 +1,4 @@
-From Coq Require Import
+From Coq Require Export
                  Strings.String
                  Bool.Bool
                  Init.Datatypes
@@ -101,8 +101,8 @@ Proof. intros. rewrite denot_loop. rewrite H. reflexivity. Qed.
 (** Symbolic Semantics *)
 
 Section EnsembleHelpers.
-  Variable X: Type.
-  Variable A B C: Ensemble X.
+  Context {X: Type}.
+  Context (A B C: Ensemble X).
 
   Lemma intersect_full: Intersection X (Full_set _) A = A.
   Proof.
@@ -123,8 +123,43 @@ Section EnsembleHelpers.
       try (destruct H; destruct H0; assumption);
       destruct H; destruct H; assumption.
   Qed.
-End EnsembleHelpers.
 
+  Definition inverse_image (F: X -> X) (B: Ensemble X): Ensemble X := fun x => B (F x).
+
+  (* characterizing inverse images *)
+  Lemma inverse_id: forall (A: Ensemble X), inverse_image (fun x => x)  A = A.
+  Proof. intros. apply Extensionality_Ensembles. split; intros V H; assumption. Qed.
+
+  Lemma inverse_full : forall F, inverse_image F (Full_set _) = Full_set X.
+  Proof. intros. apply Extensionality_Ensembles. split; intros V _; constructor. Qed.
+
+  Lemma inverse_empty : forall F, inverse_image F (Empty_set _) = Empty_set X.
+  Proof. intros. apply Extensionality_Ensembles. split; intros V H; inversion H. Qed.
+
+  Lemma inverse_complement : forall F B,
+      inverse_image F (Complement _ B) = Complement X (inverse_image F B).
+  Proof.
+      intros. apply Extensionality_Ensembles. split; intros V H.
+      - intro contra. apply H. apply contra.
+      - apply H.
+  Qed.
+
+  Lemma inverse_intersection : forall F B1 B2,
+      inverse_image F (Intersection _ B1 B2) = Intersection X (inverse_image F B1) (inverse_image F B2).
+  Proof.
+      intros. apply Extensionality_Ensembles. split; intros V H.
+      - inversion H; subst. split; assumption.
+      - destruct H. split; assumption.
+  Qed.
+
+  Lemma inverse_inverse : forall F F' (B: Ensemble X),
+      inverse_image F (inverse_image F' B) = inverse_image (fun x => F' (F x)) B.
+  Proof.
+      intros. apply Extensionality_Ensembles. split; intros V H.
+      - apply H.
+      - apply H.
+  Qed.
+End EnsembleHelpers.
 
 Definition Branch: Type := (Valuation -> Valuation) * (Ensemble Valuation).
 
@@ -132,42 +167,6 @@ Definition denot_sub (phi: sub): Valuation -> Valuation := fun V => Comp V phi.
 
 Lemma denot_id_sub: denot_sub id_sub = fun V => V.
 Proof. unfold denot_sub. extensionality V. rewrite comp_id. reflexivity. Qed.
-
-Definition inverse_image {X: Type} (F: X -> X) (B: Ensemble X): Ensemble X := fun x => B (F x).
-
-(* characterizing inverse images *)
-Lemma inverse_id {X:Type}: forall (A: Ensemble X), inverse_image (fun x => x)  A = A.
-Proof. intros. apply Extensionality_Ensembles. split; intros V H; assumption. Qed.
-
-Lemma inverse_full {X:Type}: forall F, inverse_image F (Full_set _) = Full_set X.
-Proof. intros. apply Extensionality_Ensembles. split; intros V _; constructor. Qed.
-
-Lemma inverse_empty {X:Type}: forall F, inverse_image F (Empty_set _) = Empty_set X.
-Proof. intros. apply Extensionality_Ensembles. split; intros V H; inversion H. Qed.
-
-Lemma inverse_complement {X:Type}: forall F B,
-    inverse_image F (Complement _ B) = Complement X (inverse_image F B).
-Proof.
-  intros. apply Extensionality_Ensembles. split; intros V H.
-  - intro contra. apply H. apply contra.
-  - apply H.
-Qed.
-
-Lemma inverse_intersection {X:Type}: forall F B1 B2,
-    inverse_image F (Intersection _ B1 B2) = Intersection X (inverse_image F B1) (inverse_image F B2).
-Proof.
-  intros. apply Extensionality_Ensembles. split; intros V H.
-  - inversion H; subst. split; assumption.
-  - destruct H. split; assumption.
-Qed.
-
-Lemma inverse_inverse {X:Type}: forall F F' (B: Ensemble X),
-    inverse_image F (inverse_image F' B) = inverse_image (fun x => F' (F x)) B.
-Proof.
-  intros. apply Extensionality_Ensembles. split; intros V H.
-  - apply H.
-  - apply H.
-Qed.
 
 Definition denot__B (b: Bexpr): Ensemble Valuation := fun V => Beval V b = true.
 
