@@ -28,3 +28,4 @@ Notation "x + y"   := (APlus x y) (in custom com at level 70, no associativity).
 Notation "x <= y"  := (BLeq x y) (in custom com at level 70, no associativity).
 Notation "'~' b"   := (BNot b) (in custom com at level 75, right associativity).
 Notation "x && y"  := (BAnd x y) (in custom com at level 80, left associativity).
+Notation "x == y"  := (BAnd (BLeq x y) (BLeq y x)) (in custom com at level 70, no associativity).

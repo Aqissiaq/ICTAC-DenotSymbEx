@@ -20,15 +20,8 @@ Ltac forward H :=
       let name := fresh in assert x as name; [| specialize (H name); clear name]
   end.
 
-Ltac forward_ H name :=
-  match type of H with
-  | ?x -> _ => assert x as name
-  end.
-
 Tactic Notation "forward" ident(H) :=
   forward H.
-Tactic Notation "forward" ident(H) "as" ident(name) :=
-  forward_ H name.
 Tactic Notation "forward" ident(H) "with" uconstr(o1) :=
   specialize (H o1); forward H.
 Tactic Notation "forward" ident(H) "with" uconstr(o1) uconstr(o2) :=
@@ -59,7 +52,7 @@ Notation "A ∩ B" := (Intersection _ A B) (at level 90).
 Notation "¬ A" := (Complement _ A) (at level 90).
 Notation "s |= P" := (In _ P s) (at level 90).
 Notation "V |= P" := (Beval V P = true) (at level 90).
-Notation "P =>> Q" := (denot__B P ⊆ denot__B Q) (at level 90).
+Notation "P ->> Q" := (forall V, V |= P -> V |= Q) (at level 90).
 
 Section HoareTriples.
 
@@ -80,15 +73,15 @@ Section HoareTriples.
       triple_derivable P <{while b {p}}> <{P && ~ b}>
   | triple_adjust: forall P P' p Q Q',
       triple_derivable P' p Q' ->
-      P =>> P' ->
-      Q' =>> Q ->
+      P ->> P' ->
+      Q' ->> Q ->
       triple_derivable P p Q
   .
 
   Notation "⊢ {{ P }} p {{ Q }}" := (triple_derivable P p Q) (at level 91).
 
   Lemma strengthen_triple: forall P P' p Q,
-      P =>> P' ->
+      P ->> P' ->
       ⊢ {{P'}} p {{Q}} ->
       ⊢ {{P}} p {{Q}}.
   Proof.
@@ -98,7 +91,7 @@ Section HoareTriples.
 
   Lemma weaken_triple: forall P p Q' Q,
       ⊢ {{P}} p {{Q'}} ->
-      Q' =>> Q ->
+      Q' ->> Q ->
       ⊢ {{P}} p {{Q}}.
   Proof.
     intros.
@@ -170,9 +163,6 @@ Section HoareTriples.
       apply andb_true_iff; split.
       + apply loop_invariant with (p:=p) (b:=b) (s:=s); auto.
       + apply negb_true_iff; auto.
-    - apply H1.
-      eapply IHtriple_derivable; eauto.
-      now apply H0.
   Qed.
 
   Theorem symbolic_soundness: forall P p Q σ ϕ,
@@ -187,7 +177,7 @@ Section HoareTriples.
     apply (VALID _ _ H1 COMP).
   Qed.
 
-  (* the "possible and even instructive" case *)
+  (* the "possible and even instructive" version *)
   Theorem symbolic_soundness': forall P p Q σ ϕ,
       In _ (denot__S p) (σ, ϕ) ->
       ⊢ {{P}} p {{Q}} ->
@@ -221,16 +211,14 @@ Section HoareTriples.
 
     - apply H1.
       eapply IHtriple_derivable; eauto.
-      now apply H.
   Admitted.
 
 End HoareTriples.
 
 Section HoareQuadruples.
-  (*|
+(*| Hoare Quadruples / Hoare triples with updates
 Intuition: a quadruple {P} [σ] s {Q} holds if
 V is a state that satisfies P, we start s in σ(V) and if it terminates, the result satisfies Q
-
 |*)
 
   Definition quad_valid (P: Assertion) (σ: sub) (s: Stmt) (Q: Assertion) : Prop :=
@@ -239,30 +227,49 @@ V is a state that satisfies P, we start s in σ(V) and if it terminates, the res
       denot_fun s (denot_sub σ V) = Some V' ->
       V' |= Q.
 
-  Notation "P ->> Q" := (forall V, V |= P -> V |= Q) (at level 90).
   (* Based on KeY book (fig. 17.2)*)
   Inductive quad_derivable: Assertion -> sub -> Stmt -> Assertion -> Prop :=
+  | H_asgn: forall P σ x e s Q,
+      quad_derivable P (x !-> Aapply σ e ; σ) s Q ->
+      quad_derivable P σ <{x := e ; s}> Q
   | H_exit: forall P σ Q,
-      P ->> Bapply σ Q ->
+      P ->> (Bapply σ Q) ->
       quad_derivable P σ <{skip}> Q
-  | H_seq : forall P σ s1 Q s2 R,
-      quad_derivable P σ s1 Q ->
-      quad_derivable Q id_sub s2 R ->
-      quad_derivable P σ <{s1 ; s2}> R
-  | H_asgn: forall P σ x e Q,
-      quad_derivable P (x !-> Aapply σ e ; σ) <{skip}> Q ->
-      quad_derivable P σ <{x:=e}> Q
-  | H_cond: forall P σ b s1 s2 Q,
-      quad_derivable (BAnd P (Bapply σ b)) σ s1 Q ->
-      quad_derivable (BAnd P (Bapply σ <{~ b}>)) σ s2 Q ->
-      quad_derivable P σ <{if b {s1} {s2}}> Q
-  | H_loop: forall P I σ b s1 Q,
-      P ->> (Bapply σ I) ->
+  | H_skip: forall P σ s Q,
+      quad_derivable P σ s Q ->
+      quad_derivable P σ <{skip ; s}> Q
+  | H_cond: forall P σ b s1 s2 s Q,
+      quad_derivable (BAnd P (Bapply σ b)) σ <{s1 ; s}> Q ->
+      quad_derivable (BAnd P (Bapply σ <{~b}>)) σ <{s2 ; s}> Q ->
+      quad_derivable P σ <{if b {s1} {s2} ; s}> Q
+  | H_loop: forall P σ I b s1 s Q,
+      P ->> Bapply σ I ->
       quad_derivable (BAnd I (Bapply σ b)) id_sub s1 I ->
-      quad_derivable (BAnd I (Bapply σ <{~ b}>)) id_sub <{skip}> Q ->
-      quad_derivable P σ <{while b {s1}}> Q.
-
+      quad_derivable (BAnd I (Bapply σ <{~b}>)) id_sub s Q ->
+      quad_derivable P σ <{while b {s1}; s}> Q
+  .
   Notation "⊢ {{ P }} [ σ ] s {{ Q }}" := (quad_derivable P σ s Q) (at level 90).
+
+  Inductive quad_derivable': Assertion -> sub -> Stmt -> Assertion -> Prop :=
+  | H_exit': forall P σ Q,
+      P ->> Bapply σ Q ->
+      quad_derivable' P σ <{skip}> Q
+  | H_seq' : forall P σ s1 Q s2 R,
+      quad_derivable' P σ s1 Q ->
+      quad_derivable' Q id_sub s2 R ->
+      quad_derivable' P σ <{s1 ; s2}> R
+  | H_asgn': forall P σ x e Q,
+      quad_derivable' P (x !-> Aapply σ e ; σ) <{skip}> Q ->
+      quad_derivable' P σ <{x:=e}> Q
+  | H_cond': forall P σ b s1 s2 Q,
+      quad_derivable' (BAnd P b) σ s1 Q ->
+      quad_derivable' <{P && ~ b}> σ s2 Q ->
+      quad_derivable' P σ <{if b {s1} {s2} }> Q
+  | H_loop': forall P I σ b s1 Q,
+      P ->> (Bapply σ I) ->
+      quad_derivable' (BAnd I b) id_sub s1 I ->
+      quad_derivable' (BAnd I <{~ b}>) id_sub <{skip}> Q ->
+      quad_derivable' P σ <{while b {s1} }> Q.
 
   (* Some testing *)
   Example branch_example: Stmt := <{
@@ -270,6 +277,7 @@ V is a state that satisfies P, we start s in σ(V) and if it terminates, the res
         if X <= 10
               {if Y <= 5 {X := 42} {X := 0} }
               {if 4 <= Y {X := 42} {X := 1} }
+        ; skip
       }>.
 
   Fact branch_example_valid: quad_valid (<{X <= 9 && Y <= 5}>) id_sub branch_example <{X <= 42 && 42 <= X}>.
@@ -287,25 +295,107 @@ V is a state that satisfies P, we start s in σ(V) and if it terminates, the res
   Qed.
 
   Ltac unfold_derivable :=
-    match goal with
-    | |- quad_derivable _ _ _ _ => econstructor
-    end.
+    repeat (match goal with
+            | |- quad_derivable _ _ _ _ => econstructor
+            end).
 
-  Fact branch_example_derivable: quad_derivable (<{X <= 9 && Y <= 5}>) id_sub branch_example <{X <= 42 && 42 <= X}>.
+  Ltac unfold_bexpr :=
+    repeat (match goal with
+            | H : _ /\ _ |- _ => destruct H
+            | H : _ && _ = true |- _ => apply andb_true_iff in H
+            | H : _ && _ = false |- _ => apply andb_false_iff in H
+            | H : negb _  = true |- _ => apply negb_true_iff in H
+            | H : negb _  = false |- _ => apply negb_false_iff in H
+            | H : PeanoNat.Nat.leb _ _ = true |- _ => apply PeanoNat.Nat.leb_le in H
+            | H : PeanoNat.Nat.leb _ _ = false |- _ => apply PeanoNat.Nat.leb_gt in H
+            end).
+
+  Notation "x == y"  := (BAnd (BLeq x y) (BLeq y x))
+                      (in custom com at level 70, no associativity).
+
+  Fact branch_example_derivable: quad_derivable (<{X <= 9 && Y <= 5}>) id_sub branch_example <{X == 42}>.
   Proof.
-    eapply H_seq with (Q:= <{X <= 10 && Y <= 5}>).
-    repeat unfold_derivable.
+    unfold_derivable; simpl; intros; unfold_bexpr.
+    all: lia.
+  Qed.
+
+  Example loop_example: Stmt :=
+    <{ while X <= 10 {X := X + 1 ; skip} ; skip }>.
+
+  Fact loop_example_derivable: quad_derivable <{X <= 10}> id_sub loop_example <{X == 11}>.
+  Proof.
+    (* have to "come up with" an invariant ourselves, but then it's nice *)
+    eapply H_loop with (I:=<{X <= 11}>);
+      unfold_derivable; simpl; intros; unfold_bexpr;
+      try (apply andb_true_iff; split);
+      try (apply PeanoNat.Nat.leb_le).
+    4: replace (V X) with 11.
+    all: lia.
+  Qed.
+
+  (* should be generalizable *)
+  Lemma quad_id_implies_triple: forall P s Q,
+      quad_valid P id_sub s Q ->
+      triple_valid P s Q.
+    easy. Qed.
+
+  Theorem quad_sound_concrete: forall P σ p Q,
+      ⊢ {{P}} [σ] p {{Q}} -> quad_valid P σ p Q.
+  Proof.
+    intros.
+    induction H; intros V V' PRE COMP;
+      inversion COMP; subst; eauto.
+    - eapply IHquad_derivable; eauto.
+      unfold denot_sub in *.
+      now rewrite asgn_sound.
+    - unfold denot_sub in *.
+      pose proof H _ PRE.
+      now rewrite comp_subB.
+    - destruct (Beval (denot_sub σ V) b) eqn:?.
+      + eapply IHquad_derivable1; eauto.
+        unfold denot_sub in Heqb0.
+        rewrite comp_subB in Heqb0.
+        apply andb_true_iff; eauto.
+      + eapply IHquad_derivable2; eauto.
+        unfold denot_sub in Heqb0.
+        rewrite comp_subB in Heqb0.
+        apply andb_true_iff; split; auto.
+        apply negb_true_iff; auto.
+    - destruct (option_inversion H3) as (V'' & ? & ?).
+      unfold denot_sub in *.
+      pose proof denot_while_falsifies (Bapply σ b) s1 (denot_sub σ V) V''.
+      forward H5.
+      { admit. }
+      eapply IHquad_derivable2 with V'' ; eauto.
+      apply andb_true_iff; split.
+      + apply loop_invariant with (p:=s1) (b:=(Bapply σ b)) (s:=V).
+        * apply quad_id_implies_triple; eauto.
+        * admit.
+      + now apply negb_true_iff.
+
+        (* both of these admits are of the form "starting the denot_fun in V ∘ σ
+        is the same as applying σ to the program and starting in V", but then I
+        have to define application to statements... *)
   Admitted.
 
-  Theorem hoare_sound: forall P σ s Q,
-      quad_derivable P σ s Q -> quad_valid P σ s Q.
+  Theorem quad_symbolic_soundness: forall P p Q σ σ' ϕ,
+      In _ (denot__S p) (σ, ϕ) ->
+      ⊢ {{P}} [ σ' ] p {{Q}} ->
+      forall V, V |= P -> In _ ϕ (Comp V σ') ->
+           σ (Comp V σ') |= Q.
   Proof.
-  Admitted.
+    intros.
+    epose proof correct _ _ _ _ H H2 as (V' & <- & COMP).
+    pose proof quad_sound_concrete _ _ _ _ H0 as VALID.
+    now apply (VALID _ _ H1 COMP).
+  Qed.
 
-  (* This may not be true, due to nondeterminism *)
-  Theorem hoare_complete: forall P σ s Q,
-      quad_valid P σ s Q -> quad_derivable P σ s Q.
-  Proof.
-  Admitted.
+  Lemma quad_symbolic: forall σ ϕ p q P P' Q U,
+      In _ (denot__S p) (σ, ϕ) ->
+      denot__B P' = ϕ ->
+      denot_sub U = σ ->
+      ⊢ {{P}} [ U ] q {{Q}} ->
+      quad_valid P' id_sub <{ p ; q }> Q.
+    Admitted.
 
 End HoareQuadruples.
