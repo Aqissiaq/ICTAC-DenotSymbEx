@@ -390,12 +390,29 @@ V is a state that satisfies P, we start s in σ(V) and if it terminates, the res
     now apply (VALID _ _ H1 COMP).
   Qed.
 
-  Lemma quad_symbolic: forall σ ϕ p q P P' Q U,
+  (*| Maybe this is the more salient connection:
+    If a (P, U) is the (denotation of) symbolic execution of p,
+    then it can be used to construct a valid quadruple for p;q
+   |*)
+  Lemma quad_symbolic: forall σ ϕ p q P Q U,
       In _ (denot__S p) (σ, ϕ) ->
-      denot__B P' = ϕ ->
+      denot__B P = ϕ ->
       denot_sub U = σ ->
       ⊢ {{P}} [ U ] q {{Q}} ->
-      quad_valid P' id_sub <{ p ; q }> Q.
-    Admitted.
+      quad_valid P id_sub <{ p ; q }> Q.
+  Proof.
+    intros.
+    intros V Vf ? COMP.
+    rewrite denot_id_sub in COMP.
+    inversion COMP.
+    destruct (option_inversion H5) as (V'&?&?).
+    pose proof quad_sound_concrete _ _ _ _ H2 as qVALID.
+    epose proof correct _ _ _ _ H as (?V & <- & COMP').
+    {rewrite <- H0; apply H3. }
+    rewrite H4 in COMP'.
+    inversion COMP'; subst.
+    clear COMP'.
+    eapply qVALID; eauto.
+  Qed.
 
 End HoareQuadruples.
