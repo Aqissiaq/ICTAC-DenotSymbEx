@@ -9,188 +9,25 @@ From Coq Require Import
                  Classes.RelationClasses.
 
 From BigStepSymbEx Require Import
-Limits
 Expr
 Maps
 Syntax
 Utils.
 
-Import Trace.
+Import Trace TraceNotations.
 Open Scope com_scope.
 
-Fixpoint loop_fuel__C (fuel: nat) (f: Valuation -> option Valuation) (b: Bexpr) (V: Valuation): option Valuation :=
-         match fuel with
-        | 0 => None
-        | S n => if Beval V b
-                then option_bind (f V) (loop_fuel__C n f b)
-                else Some V
-        end.
-
-Lemma loop_mono: forall i j f b V,
-    i <= j -> loop_fuel__C i f b V <<= loop_fuel__C j f b V.
-Proof.
-    induction i; intros; simpl.
-    - constructor.
-    - destruct j.
-      + inversion H.
-      + simpl; destruct (Beval V b).
-        * apply option_bind_mono.
-          -- apply lessdef_refl.
-          -- intro. apply IHi. lia.
-        * constructor.
-Qed.
-
 (** Concrete semantics *)
-Definition loop__C (f: Valuation -> option Valuation) (b: Bexpr) (V: Valuation) : option Valuation :=
-         limit (fun n => loop_fuel__C n f b V) (fun i j => loop_mono i j f b V).
-
 Fixpoint denot_fun (p: Trc) (V: Valuation): option Valuation :=
   match p with
   | <{skip}> => Some V
   | <{x := e}> => Some (x !-> Aeval V e ; V)
-  | <{p1 ; p2}> => option_bind (denot_fun p1 V) (denot_fun p2)
   | <{b?}> => if Beval V b then Some V else None
+  | <{p1 ; p2}> => option_bind (denot_fun p1 V) (denot_fun p2)
   end.
 
-(* Characterizing the concrete denotation *)
-Lemma loop_charact__C: forall f b V, exists i, forall j, i <= j -> loop_fuel__C j f b V = loop__C f b V.
-Proof. intros. apply limit_charact. Qed.
-
-Lemma loop_unique__C: forall f b V i lim,
-    (forall j, i <= j -> loop_fuel__C j f b V = lim) ->
-    loop__C f b V = lim.
-Proof.
-    intros. destruct (loop_charact__C f b V) as [i' LIM].
-    set (j := Nat.max i i').
-    rewrite <- (H j). rewrite (LIM j). reflexivity.
-    all: lia.
-Qed.
-
-Lemma denot_seq: forall p1 p2 V,
-    denot_fun <{p1 ; p2}> V = option_bind (denot_fun p1 V) (denot_fun p2).
-Proof. reflexivity. Qed.
-
-Lemma denot_loop: forall f b V,
-    loop__C f b V = if Beval V b then option_bind (f V) (loop__C f b) else Some V.
-Proof.
-    intros.
-    destruct (f V) eqn:H.
-    - destruct (loop_charact__C f b v) as [i LIM].
-      apply loop_unique__C with (i := (S i)). intros.
-      destruct j; [lia|].
-      simpl. destruct (Beval V b);
-        try reflexivity.
-      rewrite H; cbn. apply LIM. lia.
-    - destruct (loop_charact__C f b V) as [i LIM].
-      apply loop_unique__C with (i := (S i)). intros.
-      destruct j; [lia|].
-      simpl. destruct (Beval V b);
-        [rewrite H|]; reflexivity.
-Qed.
-
-Lemma loop_false: forall f b V, Beval V b = false -> loop__C f b V = Some V.
-Proof. intros. rewrite denot_loop. rewrite H. reflexivity. Qed.
-
 (** Symbolic Semantics *)
-Definition Branch: Type := (Valuation -> Valuation) * (Ensemble Valuation).
-
-Definition denot_sub (phi: sub): Valuation -> Valuation := fun V => Comp V phi.
-
-Lemma denot_id_sub: denot_sub id_sub = fun V => V.
-Proof. unfold denot_sub. extensionality V. rewrite comp_id. reflexivity. Qed.
-
-Definition denot__B (b: Bexpr): Ensemble Valuation := fun V => Beval V b = true.
-
-(* Characterizing denot__B *)
-Lemma denotB_true: forall V b, In _ (denot__B b) V <-> Beval V b = true.
-Proof. split; intros; apply H. Qed.
-
-Lemma denotB_false: forall V b, In _ (Complement _ (denot__B b)) V <-> Beval V b = false.
-Proof.
-    split; intros.
-    - apply (not_true_is_false _ H).
-    - unfold Complement, In, denot__B. intro. rewrite H in H0. discriminate.
-Qed.
-
-Lemma denotB_top: denot__B (BTrue) = Full_set _.
-Proof.
-  apply Extensionality_Ensembles. split; intros V _.
-  - apply Full_intro.
-  - unfold denot__B, In. reflexivity.
-Qed.
-
-Lemma denotB_bot: denot__B BFalse = Empty_set _.
-Proof. apply Extensionality_Ensembles. split; intros V H; inversion H. Qed.
-
-Lemma denotB_neg: forall b, denot__B <{~ b}> = Complement _ (denot__B b).
-Proof.
-  intros. apply Extensionality_Ensembles. split; intros V H.
-  - intro contra. inversion H. inversion contra.
-    rewrite negb_true_iff in H1. rewrite H1 in H2. discriminate.
-  - unfold denot__B, Ensembles.In. simpl. rewrite negb_true_iff.
-    apply not_true_is_false in H. apply H.
-Qed.
-
-Lemma denotB_and: forall b1 b2,
-    denot__B <{b1 && b2}> = Intersection _ (denot__B b1) (denot__B b2).
-Proof.
-  intros. apply Extensionality_Ensembles. split; intros V H.
-  - inversion H. apply andb_true_iff in H1. destruct H1.
-    split; assumption.
-  - destruct H.
-    unfold denot__B, Ensembles.In. simpl. rewrite andb_true_iff.
-    split; assumption.
-Qed.
-
-(* Equation (1) *)
-Lemma denot_sub_sound: forall sigma V e,
-    Aeval (denot_sub sigma V) e = Aeval V (Aapply sigma e).
-Proof. unfold denot_sub. intros. apply comp_sub. Qed.
-
-(* Equation (2) *)
-Lemma inverse_denotB: forall s b,
-    denot__B (Bapply s b) = inverse_image (denot_sub s) (denot__B b).
-Proof.
-  intros. induction b.
-  - simpl. rewrite denotB_top. rewrite inverse_full. reflexivity.
-  - simpl. rewrite denotB_bot. rewrite inverse_empty. reflexivity.
-  - simpl. rewrite 2 denotB_neg. rewrite IHb. rewrite inverse_complement. reflexivity.
-  - simpl. rewrite 2 denotB_and. rewrite IHb1, IHb2. rewrite inverse_intersection. reflexivity.
-  - apply Extensionality_Ensembles. split; intros V H.
-    + inversion H. rewrite <- 2 denot_sub_sound in H1.
-      unfold inverse_image, In. unfold denot_sub. apply H1.
-    + inversion H.
-      unfold denot__B, Ensembles.In. simpl. unfold denot_sub in H1.
-      rewrite <- 2 comp_sub. apply H1.
-Qed.
-
-Definition compose_subs (s s': sub): sub := fun x => Aapply s (s' x).
-
-Lemma compose_subs_id: forall s, compose_subs id_sub s = s.
-Proof.
-  intros.
-  unfold compose_subs.
-  extensionality x.
-  now rewrite Aapply_id.
-Qed.
-
-Lemma compose_subs_id': forall s, compose_subs s id_sub = s.
-Proof.
-  intros.
-  unfold compose_subs.
-  extensionality x.
-  easy.
-Qed.
-
-Lemma compose_comp: forall V s s',
-    Comp V (compose_subs s s') = (fun x => Comp (Comp V s) s' x).
-Proof.
-  intros.
-  extensionality x.
-  unfold Comp, compose_subs.
-  induction (s' x); simpl; auto.
-Qed.
-
+(* TODO: cleanup *)
 Fixpoint trace_denot__S (t:Trc): sub * Bexpr :=
   match t with
   | <{skip}> => (id_sub, BTrue)
@@ -232,6 +69,25 @@ Proof.
     unfold Sub in *; cbn in *.
     destruct (trace_denot__S t1), (trace_denot__S t2); cbn in *.
     now subst.
+Qed.
+
+Lemma Sub_unit_l: forall t,
+    Sub (TSeq TSkip t) = Sub t.
+Proof.
+  destruct t; cbn; auto.
+  - now rewrite compose_subs_id.
+  - unfold Sub; cbn.
+    destruct (trace_denot__S t1), (trace_denot__S t2); cbn.
+    now rewrite compose_subs_id.
+Qed.
+
+Lemma Sub_unit_r: forall t,
+    Sub (TSeq t TSkip) = Sub t.
+Proof.
+  destruct t; cbn; auto.
+  unfold Sub; cbn.
+  destruct (trace_denot__S t1), (trace_denot__S t2); cbn.
+  now rewrite compose_subs_id'.
 Qed.
 
 Definition PC (t:Trc) := snd (trace_denot__S t).
@@ -318,7 +174,7 @@ Proof.
     pose proof not_none_monotone' _ _ _ _ H H0.
     apply IHt2 in H1.
     cbn in H.
-    destruct (denot_fun t1 V) eqn:?; simpl; [|contradiction].
+    destruct (denot_fun t1 V) eqn:?; simpl; [ |contradiction].
     inv H0.
     unfold denot_sub, Sub in *;
       rewrite Heqp, Heqp0 in *;
@@ -326,12 +182,14 @@ Proof.
     now rewrite H1, compose_comp.
 Qed.
 
+Notation "V |= b" := (Beval V b = true) (at level 90).
+
 (** Lemma 5 *)
 Lemma trace_correspondence_aux: forall t V,
     denot_fun t V <> None <-> V |= PC t.
 Proof.
   split.
-  - destruct (denot_fun t V) eqn:?; [|contradiction].
+  - destruct (denot_fun t V) eqn:?; [ |contradiction].
     generalize dependent v.
     generalize dependent V.
     induction t; intros.
@@ -404,7 +262,7 @@ Proof.
       now rewrite H0.
     + assert (denot_fun t V <> None) by now rewrite H0.
       pose proof trace_sub_correct _ _ H1.
-      destruct (denot_fun t V); [|contradiction].
+      destruct (denot_fun t V); [ |contradiction].
       inv H0.
       now inv H2.
   - destruct H0.
@@ -412,3 +270,7 @@ Proof.
     rewrite (trace_sub_correct _ _ H0).
     now rewrite H1.
 Qed.
+
+Print Assumptions trace_correspondence.
+
+(*TODO: The DL stuff? *)

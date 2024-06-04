@@ -1,19 +1,18 @@
-# ICTAC: Denotational Semantics for Symbolic Execution
-Coq mechanization of "Denotational Semantics for Symbolic Execution" for ICTAC23 submission.
+# Fully Symbolic Semantics
+Coq mechanization of "Fully Symbolic Semantics"
 
 ## Contents
+The development follows the paper (except for DL, for now), with one file per section.
 ### Main results
-- [BigStep](./BigStep.v) covers section 2-3, culminating in Theorem 1: `concrete_symbolic_correspondence`
-- [SmallStep](./SmallStep.v) defines and describes the small-step trace semantics of section 4, and
-- [Correspondence](./Correspondence.v) proves Theorem 2: `big_small_correspondence`
-- [Direct](./Direct.v) proves Proposition 1 (`trace_if_direct` and `direct_if_trace`) and its corollaries `correctness` and `completeness`.
+- [Traces](./Traces) covers section 3.
+- [Programs](./Programs.v) covers section 5 and 6, and
+- [Operational](./Operational.v) covers section 7
     
 ### Auxilliary materials
 - [Expr](./Expr.v) contains the syntax of expressions, and
-- [Syntax](./Syntax.v) the syntax of our toy language WHILE
+- [Syntax](./Syntax.v) the syntax of our languages Trace, NonDet and While.
 - [Maps](./Maps.v) contains definitions and useful lemmas about total maps used to reason about substitutions and valuations
-- [Limits](./Limits.v) contains the use of constructive description to handle non-termination
-- Finally, [BigStepExamples](./BigStepExamples.v) contains some examples runs of the big step semantics
+- [Utils](./Utils.v) contains various lemmas about sets, relations and other useful constructions
 
 ## Build
 The included Makefile (created for Coq 8.16.1) should allow just
