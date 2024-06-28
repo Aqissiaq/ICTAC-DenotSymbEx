@@ -7,6 +7,20 @@ From BigStepSymbEx Require Import
 Ltac inv H := inversion H; subst.
 Ltac splits := repeat split.
 
+Definition sub_singleton {X:Type}: Ensemble X -> Prop :=
+  fun A => A = Empty_set _ \/ exists x, A = Singleton _ x.
+
+Lemma sub_singleton_empty {X:Type}: sub_singleton (Empty_set X).
+Proof.
+  now left.
+Qed.
+
+Lemma sub_singleton_singleton{X:Type}: forall x, sub_singleton (Singleton X x).
+Proof.
+  right.
+  now exists x.
+Qed.
+
 Section EnsembleHelpers.
   Context {X Y Z: Type}.
 
@@ -121,6 +135,97 @@ Proof.
   - now rewrite H.
 Qed.
 
+Lemma set_compose_empty: forall (f:X -> Ensemble Y) (g:Y -> Ensemble Z) (x:X),
+    f x = Empty_set _ ->
+    set_compose f g x = Empty_set _.
+Proof.
+  intros.
+  unfold set_compose.
+  apply Extensionality_Ensembles.
+  split; intros ? ?.
+  - destruct H0 as (? & ? & ?).
+    rewrite H in H0.
+    exfalso. inv H0.
+  - exfalso. inv H0.
+Qed.
+
+Lemma set_compose_singleton_first: forall (f:X -> Ensemble Y) (g:Y -> Ensemble Z) x y,
+    f x = Singleton _ y ->
+    set_compose f g x = g y.
+Proof.
+  intros.
+  unfold set_compose.
+  apply Extensionality_Ensembles.
+  split; intros ? ?.
+  - destruct H0 as (? & ? & ?).
+    rewrite H in H0.
+    now inv H0.
+  - exists y.
+    split; auto.
+    rewrite H; constructor.
+Qed.
+
+Lemma union_unit_r: forall A,
+    Union X A (Empty_set _) = A.
+Proof.
+  intros.
+  apply Extensionality_Ensembles.
+  split; intros ? ?.
+  - destruct H; auto.
+    inv H.
+  - now left.
+Qed.
+
+Lemma union_unit_l: forall A,
+    Union X (Empty_set _) A = A.
+Proof.
+  intros.
+  apply Extensionality_Ensembles.
+  split; intros ? ?.
+  - destruct H; auto.
+    inv H.
+  - now right.
+Qed.
+
+Lemma sub_singleton_set_compose_first: forall (f: X -> Ensemble Y) (g: Y -> Ensemble Z) x,
+    sub_singleton (f x) ->
+    (forall y, sub_singleton (g y)) ->
+    sub_singleton (set_compose f g x).
+Proof.
+  intros.
+  destruct H as [? | (?V & ?)].
+  - rewrite set_compose_empty; auto.
+    apply sub_singleton_empty.
+  - erewrite set_compose_singleton_first; eauto.
+Qed.
+
+Lemma sub_singleton_set_compose_snd: forall (f: X -> Ensemble Y) (g: Y -> Ensemble Z) x y,
+    f x = Singleton _ y ->
+    sub_singleton (g y) ->
+    sub_singleton (set_compose f g x).
+Proof.
+  intros.
+  erewrite set_compose_singleton_first; eauto.
+Qed.
+
+Lemma sub_singleton_if: forall (b:bool) (x:X),
+    sub_singleton (if b then Singleton _ x else Empty_set _).
+Proof.
+  intros.
+  destruct b.
+  - apply sub_singleton_singleton.
+  - apply sub_singleton_empty.
+Qed.
+
+Lemma sub_singleton_if': forall (b:bool) (x:X),
+    sub_singleton (if b then Empty_set _ else Singleton _ x).
+Proof.
+  intros.
+  destruct b.
+  - apply sub_singleton_empty.
+  - apply sub_singleton_singleton.
+Qed.
+
 End EnsembleHelpers.
 
 #[export] Hint Rewrite (@intersect_comm Valuation) (@intersect_full Valuation) : denotB.
@@ -217,6 +322,7 @@ Proof.
   - exists x. split; auto.
   - inversion H.
 Qed.
+
 Lemma some_not_none {X:Type}: forall (x:X), Some x <> None.
 Proof. easy. Qed.
 

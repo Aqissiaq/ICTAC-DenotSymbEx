@@ -25,7 +25,8 @@ Fixpoint denot_fun_nondet (p: Prg) (V: Valuation): Ensemble Valuation :=
   match p with
   | PSkip => Singleton _ V
   | PAsgn x e => Singleton _ (x !-> Aeval V e ; V)
-  | PAsrt b => if Beval V b then Singleton _ V else Empty_set _ | <{p1 (+) p2}> => Union _ (denot_fun_nondet p1 V) (denot_fun_nondet p2 V)
+  | PAsrt b => if Beval V b then Singleton _ V else Empty_set _
+  | <{p1 (+) p2}> => Union _ (denot_fun_nondet p1 V) (denot_fun_nondet p2 V)
   | <{p*}> => Union_Fam (fun n => n_fold_set n (denot_fun_nondet p) V)
   | PSeq p1 p2 => set_compose (denot_fun_nondet p1) (denot_fun_nondet p2) V
   end.
@@ -56,22 +57,6 @@ Proof.
       split; auto.
 Qed.
 
-(*TODO: lemma 7?*)
-
-Definition trace_app (t1 t2: Trc): Trc :=
-  match (t1, t2) with
-  | (TSkip, TSkip) => TSkip
-  | (TSkip, t) => t
-  | (t, TSkip) => t
-  | (t1, t2) => TSeq t1 t2
-  end.
-
-Lemma trace_app_unit_l: forall t, trace_app TSkip t = t.
-Proof. destruct t; auto. Qed.
-
-Lemma trace_app_unit_r: forall t, trace_app t TSkip = t.
-Proof. destruct t; auto. Qed.
-
 Lemma denot_fun_unit_l: forall t, denot_fun t = denot_fun (TSeq TSkip t).
 Proof. destruct t; auto. Qed.
 
@@ -88,142 +73,16 @@ Proof.
     destruct (denot_fun t2 v); simpl; auto.
 Qed.
 
-Lemma trace_app_denot: forall t1 t2,
-    denot_fun (TSeq t1 t2) = denot_fun (trace_app t1 t2).
-Proof.
-  destruct t1, t2; auto.
-  - extensionality V.
-    simpl.
-    destruct (Beval V b); easy.
-  - rewrite trace_app_unit_r.
-    now rewrite <- denot_fun_unit_r.
-Qed.
-
-Lemma trace_app_denot_sub: forall t1 t2,
-    denot_sub (Sub (TSeq t1 t2)) = denot_sub (Sub (trace_app t1 t2)).
-Proof.
-  intros.
-  epose proof Sub_spec_correct (TSeq t1 t2) as (?&_).
-  specialize (H eq_refl).
-  destruct t1, t2; auto; inv H.
-  - inv H3.
-    inv H4.
-    now rewrite compose_subs_id.
-  - inv H3.
-    cbn in *.
-    now rewrite H2, Sub_unit_l.
-  - now rewrite trace_app_unit_r, H2, Sub_unit_r.
-Qed.
-
 Ltac Sub_spec_unfold p :=
   let H := fresh in epose proof Sub_spec_correct p as (H&_);
                     specialize (H eq_refl);
                     inv H.
-
-(* Lemma 2 (ICTAC) *)
-Lemma acc_subst_concat_comp: forall s t,
-    [|(Sub (trace_app s t))|] = fun V => [|(Sub t)|] ([|(Sub s)|] V).
-Proof.
-  destruct s, t; cbn; auto.
-
-  - extensionality V.
-    unfold denot_sub.
-    now rewrite compose_comp.
-
-  - Sub_spec_unfold (TSeq (TAsgn x e) (TSeq t1 t2)).
-    inv H3.
-    extensionality V.
-    unfold denot_sub.
-    rewrite compose_comp.
-    now apply Sub_spec_correct in H4; subst.
-
-  - now rewrite compose_subs_id.
-
-  - Sub_spec_unfold (TSeq (TAsrt b) (TSeq t1 t2)).
-    inv H3.
-    extensionality V.
-    unfold denot_sub.
-    rewrite compose_comp.
-    now apply Sub_spec_correct in H4; subst.
-
-  - Sub_spec_unfold (TSeq (TSeq s1 s2) (TAsgn x e)).
-    inv H4.
-    extensionality V.
-    unfold denot_sub.
-    rewrite compose_comp.
-    now apply Sub_spec_correct in H3; subst.
-
-  - Sub_spec_unfold (TSeq (TSeq s1 s2) (TAsrt b)).
-    inv H4.
-    extensionality V.
-    unfold denot_sub.
-    rewrite compose_comp.
-    now apply Sub_spec_correct in H3; subst.
-
-  - Sub_spec_unfold (TSeq (TSeq s1 s2) (TSeq t1 t2)).
-    rewrite compose_sub_spec.
-    now apply Sub_spec_correct in H3, H4; subst.
-Qed.
-
-Lemma trace_app_denot_pc: forall t1 t2,
-    {| (PC (TSeq t1 t2)) |} = {| (PC (trace_app t1 t2)) |}.
-Proof.
-  intros.
-  epose proof PC_spec_correct (TSeq t1 t2) as (?&_).
-  specialize (H eq_refl).
-  destruct t1, t2; auto; inv H.
-  - inv H3.
-    inv H5.
-    cbn.
-    now rewrite denotB_and, denotB_top, intersect_full, Bapply_id.
-  - inv H3.
-    cbn in *.
-    rewrite denotB_and, denotB_top, intersect_full, Bapply_id.
-    now apply PC_spec_correct in H4; subst.
-  - cbn.
-    now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
-  - apply PC_spec_correct in H3, H4; subst.
-    cbn.
-    now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
-Qed.
 
 Ltac PC_spec_unfold p :=
   let H := fresh in epose proof PC_spec_correct p as (H&_);
                     specialize (H eq_refl);
                     inv H.
 
-(* Lemma 3 (ICTAC) *)
-Lemma concat_pc: forall u v,
-    denot__B (PC (trace_app u v)) = denot__B (BAnd (PC u) (Bapply (Sub u) (PC v))).
-Proof.
-  destruct u, v; cbn; auto;
-    try (rewrite denotB_and);
-    try (rewrite denotB_neg);
-    try (rewrite denotB_top);
-    try (rewrite intersect_full);
-    try (rewrite intersect_comm, intersect_full);
-    try (rewrite Bapply_id);
-    auto.
-  - PC_spec_unfold (TSeq (TAsgn x e) (TSeq v1 v2)).
-    apply PC_spec_correct in H3, H4; subst; cbn.
-    now rewrite denotB_and, denotB_top, intersect_full.
-
-  - PC_spec_unfold (TSeq (TAsrt b) (TSeq v1 v2)).
-    apply PC_spec_correct in H3, H4; subst; cbn.
-    now rewrite denotB_and, Bapply_id.
-
-  - PC_spec_unfold (TSeq (TSeq u1 u2) (TAsgn x e)).
-    apply PC_spec_correct in H3, H4; subst; cbn.
-    now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
-
-  - PC_spec_unfold (TSeq (TSeq u1 u2) (TAsrt b)).
-    apply PC_spec_correct in H3, H4; subst; cbn.
-    now rewrite denotB_and.
-
-  - PC_spec_unfold (TSeq (TSeq u1 u2) (TSeq v1 v2)).
-    rewrite denotB_and.
-    now apply PC_spec_correct in H3, H4; subst.
-Qed.
 
 Fixpoint n_fold_seq (n:nat) (ts: Ensemble Trc): Ensemble Trc :=
   match n with
@@ -231,7 +90,7 @@ Fixpoint n_fold_seq (n:nat) (ts: Ensemble Trc): Ensemble Trc :=
   | S n => fun t => exists u v,
               In _ ts u
               /\ In _ (n_fold_seq n ts) v
-              /\  t = trace_app u v
+              /\  t = TSeq u v
   end.
 
 (* Definition 10 *)
@@ -242,13 +101,13 @@ Fixpoint traces_of (p:Prg): Ensemble Trc :=
   | PAsrt b => Singleton _ (TAsrt b)
   | <{p1 (+) p2}> => Union _ (traces_of p1) (traces_of p2)
   | <{p*}> => Union_Fam (fun n => n_fold_seq n (traces_of p))
-  | PSeq p1 p2 => fun x => exists t u, In _ (traces_of p1) t /\ In _ (traces_of p2) u /\ x = trace_app t u
+  | PSeq p1 p2 => fun x => exists t u, In _ (traces_of p1) t /\ In _ (traces_of p2) u /\ x = TSeq t u
   end.
 
 Lemma traces_of_loop_step: forall p n u v,
     In _ (traces_of p) u ->
     In _ (n_fold_seq n (traces_of p)) v ->
-    In _ (n_fold_seq (S n) (traces_of p)) (trace_app u v).
+    In _ (n_fold_seq (S n) (traces_of p)) (TSeq u v).
 Proof.
   induction n; intros.
   - cbn in *.
@@ -257,11 +116,11 @@ Proof.
     split; auto.
   - destruct H0 as (?u & ?v & (? & ? & ->)).
     pose proof IHn _ _ H H1.
-    exists u, (trace_app u0 v0).
+    exists u, (TSeq u0 v0).
     split; auto.
 Qed.
 
-(* Lemma 8 *)
+(* Lemma 7 *)
 Lemma traces_of_correspondence: forall p V,
     denot_fun_nondet p V = (fun V' => exists t, denot_fun t V = Some V' /\ In _ (traces_of p) t).
 Proof.
@@ -303,16 +162,14 @@ Proof.
       apply IHp2 in H0.
       destruct H as (?t & ? & ?).
       destruct H0 as (?t & ? & ?).
-      exists (trace_app t t0).
+      exists (TSeq t t0).
       split.
-      * rewrite <- trace_app_denot.
-        cbn.
+      * cbn.
         now rewrite H.
       * exists t, t0.
         split; auto.
     + destruct H as (?t & ? & ?).
       destruct H0 as (u & v & ? & ? & ->).
-      rewrite <- trace_app_denot in H.
       cbn in *.
       destruct (option_inversion H) as (?V & ? & ?).
       assert (exists t, denot_fun t V = Some V0 /\ In _ (traces_of p1) t). {
@@ -368,9 +225,9 @@ Proof.
         destruct (H1 _ H) as (?t & ? & ?).
 
         destruct (IHn _ _ H0) as (?t & ? & ?).
-        exists (trace_app t t0).
+        exists (TSeq t t0).
         split.
-        -- rewrite <- trace_app_denot; simpl.
+        -- simpl.
            rewrite H2; auto.
         -- destruct H5 as [?n ? ?].
            exists (S n0).
@@ -386,7 +243,6 @@ Proof.
         inv H.
         exists 0; now cbn.
       * destruct H0 as (?u & ?v & ? & ? & ->).
-        rewrite <- trace_app_denot in H.
         cbn in H.
         destruct (option_inversion H) as (?V & ? & ?).
         pose proof IHn _ _ _ H3 H1.
@@ -434,68 +290,76 @@ Definition Branch: Type := sub * Bexpr.
 Definition denot__S (p: Prg): Ensemble Branch :=
   fun '(s, b) => exists t, In _ (traces_of p) t /\ s = Sub t /\ b = PC t.
 
-Lemma sub_trace_app: forall u v,
-    Sub (trace_app u v) = compose_subs (Sub u) (Sub v).
+Lemma Sub_skip_unit_l: forall t,
+    Sub (TSeq TSkip t) = Sub t.
 Proof.
-  destruct u,v; cbn; auto;
-    try (now rewrite compose_subs_id);
-    unfold Sub; cbn.
-    1,2: now destruct (trace_denot__S v1), (trace_denot__S v2); cbn.
-    1,2: now destruct (trace_denot__S u1), (trace_denot__S u2); cbn.
+  intros.
+  unfold Sub.
+  cbn.
+  destruct (trace_denot__S t); cbn.
+  now rewrite compose_subs_id.
+Qed.
+
+Lemma Sub_skip_unit_r: forall t,
+    Sub (TSeq t TSkip) = Sub t.
+Proof.
+  intros.
+  unfold Sub.
+  cbn.
+  destruct (trace_denot__S t); cbn.
+  now rewrite compose_subs_id'.
+Qed.
+
+Lemma sub_trace_app: forall u v,
+    Sub (TSeq u v) = compose_subs (Sub u) (Sub v).
+Proof.
+  destruct u,v; cbn; auto.
+  - now rewrite compose_subs_id, Sub_skip_unit_l.
+  - unfold Sub; cbn.
+    now destruct (trace_denot__S v1), (trace_denot__S v2); cbn.
+  - unfold Sub; cbn.
+    now destruct (trace_denot__S v1), (trace_denot__S v2); cbn.
+  - now rewrite compose_subs_id', Sub_skip_unit_r.
+  - unfold Sub; cbn.
+    now destruct (trace_denot__S u1), (trace_denot__S u2); cbn.
+  - unfold Sub; cbn.
+    now destruct (trace_denot__S u1), (trace_denot__S u2); cbn.
+  - unfold Sub; cbn.
     now destruct (trace_denot__S u1), (trace_denot__S u2),
       (trace_denot__S v1), (trace_denot__S v2) ; cbn.
 Qed.
 
 Lemma pc_trace_app: forall u v,
-  {| PC (trace_app u v) |} = {| BAnd (PC u) (Bapply (Sub u) (PC v)) |}.
-  Proof.
-  destruct u,v; cbn; auto;
-    try rewrite Bapply_id;
-    try rewrite denotB_and;
-    try rewrite denotB_top;
-    try rewrite intersect_full;
-    try rewrite intersect_comm, intersect_full;
-    auto.
-  - unfold PC; cbn.
-    destruct (trace_denot__S v1), (trace_denot__S v2); cbn.
-    now rewrite 2 denotB_and, denotB_top, intersect_full.
-  - unfold PC; cbn.
-    destruct (trace_denot__S v1), (trace_denot__S v2); cbn.
-    now rewrite 2 Bapply_id, 2 denotB_and.
-  - unfold PC; cbn.
-    destruct (trace_denot__S u1), (trace_denot__S u2); cbn.
-    now rewrite 2 denotB_and, denotB_top, intersect_comm, intersect_full.
-  - unfold PC; cbn.
-    destruct (trace_denot__S u1) eqn:?, (trace_denot__S u2) eqn:?; cbn.
-    pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
+    PC (TSeq u v) =  BAnd (PC u) (Bapply (Sub u) (PC v)).
+Proof.
+  destruct u,v; unfold PC; cbn; auto;
+    try (destruct (trace_denot__S v1) eqn:?, (trace_denot__S v2) eqn:?; cbn; auto);
+    destruct (trace_denot__S u1) eqn:?, (trace_denot__S u2) eqn:?; cbn; auto.
+  - pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
     specialize (H eq_refl).
     inv H.
     apply Sub_spec_correct in H3, H4.
     unfold Sub in H3, H4.
     rewrite Heqp in H3.
     rewrite Heqp0 in H4.
-    simpl in *; subst.
-    now rewrite denotB_and.
-  - unfold PC; cbn.
-    destruct (trace_denot__S u1) eqn:?, (trace_denot__S u2) eqn:?; cbn.
-    destruct (trace_denot__S v1) eqn:?, (trace_denot__S v2) eqn:?; cbn.
-    pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
+    now simpl in *; subst.
+
+  - pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
     specialize (H eq_refl).
     inv H.
     apply Sub_spec_correct in H3, H4.
     unfold Sub in H3, H4.
-    rewrite Heqp in H3.
-    rewrite Heqp0 in H4.
+    rewrite Heqp1 in H3.
+    rewrite Heqp2 in H4.
 
     pose proof Sub_spec_correct (TSeq v1 v2) as (?&_).
     specialize (H0 eq_refl).
     inv H0.
     apply Sub_spec_correct in H7, H8.
     unfold Sub in H7, H8.
-    rewrite Heqp1 in H7.
-    rewrite Heqp2 in H8.
-    simpl in *; subst.
-    now rewrite 2 denotB_and.
+    rewrite Heqp in H7.
+    rewrite Heqp0 in H8.
+    now simpl in *; subst.
 Qed.
 
 (* Lemma 9 in four parts *)
@@ -504,7 +368,7 @@ Lemma denotS_spec_seq: forall p q,
                             In _ (denot__S p) (σp, φp)
                             /\ In _ (denot__S q) (σq, φq)
                             /\ σ = compose_subs σp σq
-                            /\ {|φ|} = {|BAnd φp (Bapply σp φq)|}. (*<- this is an issue *)
+                            /\ φ = BAnd φp (Bapply σp φq).
 Proof.
   intros.
   apply Extensionality_Ensembles.
@@ -522,21 +386,20 @@ Proof.
     + eexists.
       splits; eauto.
     + apply sub_trace_app.
-    + apply pc_trace_app. (* <- here we only get equal sets *)
+    + apply pc_trace_app.
 
   - destruct x.
     destruct H as (σp & σq & φp & φq & ? & ? & -> & ?).
     destruct H as (tp & ? & -> & ->).
     destruct H0 as (tq & ? & -> & ->).
-    eexists (trace_app tp tq).
+    eexists (TSeq tp tq).
     splits.
     + eexists.
       eexists.
       splits; auto.
     + now rewrite sub_trace_app.
-    + rewrite <- pc_trace_app in H1.
-      admit. (*<- but here the equal sets are not strong enough *)
-Admitted.
+    + now rewrite H1, pc_trace_app.
+Qed.
 
 Lemma denotS_spec_choice: forall p q,
     denot__S (PChoice p q) = Union _ (denot__S p) (denot__S q).
@@ -566,7 +429,50 @@ Proof.
       now right.
 Qed.
 
-(* TODO: Lemma 9 (iii) *)
+(* we need two definitions for (iii) *)
+(* also note that the formulation does not include an extra TSkip, since this is the 0-case of n_fold_PSeq *)
+Fixpoint n_fold_PSeq (n:nat) (p:Prg): Prg :=
+  match n with
+  | 0 => PSkip
+  | S n => PSeq p (n_fold_PSeq n p)
+  end.
+
+Lemma n_fold_prg_trace: forall n p t,
+    In _ (n_fold_seq n (traces_of p)) t <->
+    In _ (traces_of (n_fold_PSeq n p)) t.
+Proof.
+  induction n; split; intros; try easy.
+  - destruct H as (?u & ?v & ? & ? & ->).
+    exists u, v.
+    splits; auto.
+    now apply IHn.
+  - destruct H as (?u & ?v & ? & ? & ->).
+    exists u, v.
+    splits; auto.
+    now apply IHn.
+Qed.
+
+Lemma denotS_spec_ind: forall p,
+    denot__S (PStar p) = Union_Fam (fun n:nat => denot__S (n_fold_PSeq n p)).
+Proof.
+  intros.
+  apply Extensionality_Ensembles.
+  split; intros ? ?.
+  - destruct x.
+    destruct H as (t & ? & -> & ->).
+    inv H.
+    exists i, t.
+    splits.
+    now apply n_fold_prg_trace.
+  - destruct H.
+    destruct x.
+    destruct H as (t & ? & -> & ->).
+    exists t.
+    splits.
+    exists i.
+    now apply n_fold_prg_trace.
+Qed.
+
 Lemma denotS_spec_unfold: forall p,
     denot__S (PStar p) = Union _ (denot__S PSkip) (denot__S (PSeq p (PStar p))).
 Proof.
@@ -599,7 +505,7 @@ Proof.
     + destruct x.
       destruct H as (t & ? & -> & ->).
       destruct H as (u & v & ? & ? & ->).
-      exists (trace_app u v).
+      exists (TSeq u v).
       splits.
       inv H0.
       exists (S i).
@@ -643,5 +549,3 @@ Qed.
 
 Print Assumptions SE_correct.
 Print Assumptions SE_complete.
-
-(*TODO: Translate results to While *)

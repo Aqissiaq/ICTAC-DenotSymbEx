@@ -137,6 +137,15 @@ Definition multi_Sstep': relation SConfig :=
   fun '(p, σ, φ) '(q, σ', φ') => exists φ'', (p, σ, φ) ->* (q, σ', φ'') /\ {| φ'' |} = {| φ' |}.
 Notation " c '=>*' c' " := (multi_Sstep' c c') (at level 40).
 
+Lemma step_to_step': forall p q σ σ' φ φ',
+    (p, σ, φ) ->* (q, σ', φ') ->
+    (p, σ, φ) =>* (q, σ', φ').
+Proof.
+  intros.
+  exists φ'.
+  split; auto.
+Qed.
+
 (*NOTE: Erik claims iff, but I don't think the condition on φ is strong enough *)
 Lemma canonical_SE_step: forall p q σ σ' φ φ',
     (p, σ, φ) ->s (q, σ', φ') -> exists σc φc,
@@ -200,6 +209,23 @@ Proof.
       now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
 Qed.
 
+Lemma SE_canonical_step: forall p q σ σ' φ φ',
+    (exists σc φc,
+        (p, id_sub, BTrue) ->s (q, σc, φc)
+                            /\ (σ' = compose_subs σ σc)
+                            /\ ({| φ' |} = {| BAnd φ (Bapply σ φc) |})) ->
+    (p, σ, φ) ->s (q, σ', φ').
+Proof.
+  intros.
+  destruct H as (?σ & ?φ & ? & ? & ?).
+  dependent induction H.
+  - eapply Asgn'; eauto.
+    + rewrite H0, Aapply_id.
+      now rewrite asgn_compose.
+    + cbn in H1.
+    (* we need *equal* path conditions, but hypothesis only gives equivalent *)
+Abort.
+
 Lemma canonical_soundness_step: forall p q σ φ σ' φ',
     (p, id_sub, BTrue) ->s (q, σ, φ) ->
     In _ (denot__S q) (σ', φ') ->
@@ -222,15 +248,17 @@ Proof.
       splits.
     + now rewrite 2 denotB_and, Bapply_id, denotB_top, intersect_full, intersect_comm, intersect_full.
 
-  - exists φ'.
+  - exists <{BTrue && φ'}>.
     split.
     + rewrite compose_subs_id.
       destruct H0 as (?t & ? & -> & ->).
-      exists t.
+      exists (TSeq TSkip t).
       splits.
       exists TSkip, t.
       splits; auto.
-      now rewrite trace_app_unit_l.
+      now rewrite Sub_skip_unit_l.
+      rewrite pc_trace_app; cbn.
+      now rewrite Bapply_id.
     + now rewrite Bapply_id, denotB_and, denotB_top, intersect_full.
 
   - destruct H0 as (?t & ? & -> & ->).
@@ -240,19 +268,18 @@ Proof.
     }
     epose proof IHp1 _ _ _ _ _ H2 H3 as (?φ & ? & ?).
     destruct H4 as (?t & ? & ? & ->).
-    exists (PC (trace_app t v)).
+    exists (PC (TSeq t v)).
     split.
-    + exists (trace_app t v).
+    + exists (TSeq t v).
       splits.
       * exists t,v.
         splits; auto.
       * now rewrite 2 sub_trace_app, <- H6, compose_subs_assoc.
-    + rewrite concat_pc.
+    + rewrite 2 pc_trace_app.
       rewrite 2 denotB_and.
       rewrite <- H5, <- H6.
       rewrite denotB_and.
       rewrite 3 inverse_denotB.
-      rewrite concat_pc.
       rewrite denotB_and.
       rewrite inverse_denotB.
       rewrite compose_sub_spec.
@@ -372,21 +399,175 @@ Proof.
     + now apply IHclos_refl_trans_n1.
 Qed.
 
+Lemma equiv_pc_step: forall p p' σ σ' φ1 φ1' φ2,
+    (p, σ, φ1) ->s (p', σ', φ2) ->
+    {| φ1 |} = {| φ1' |} ->
+    exists φ2',
+      (p, σ, φ1') ->s (p', σ', φ2') /\ {| φ2 |} = {| φ2' |}.
+Proof.
+  induction p; intros; inv H;
+    try (now eexists; split; [econstructor | auto]).
+  - eexists.
+    split.
+    + eapply Asrt'; eauto.
+    + now rewrite 2 denotB_and, H0.
+  - epose proof IHp1 _ _ _ _ _ _ H2 H0 as (?φ & ? & ?).
+    eexists.
+    split.
+    + econstructor.
+      apply H1.
+    + auto.
+Qed.
+
+Lemma compose_step: forall p p' σ σ' φ φ',
+    (p, σ, φ) ->s (p', σ', φ') ->
+    forall σ0 φ0,
+      (p, compose_subs σ0 σ, BAnd φ0 (Bapply σ0 φ)) ->s (p', compose_subs σ0 σ', BAnd φ0 (Bapply σ0 φ')).
+Proof.
+  induction p; intros; inv H;
+    try (econstructor).
+  - eapply Asgn'; eauto.
+    now rewrite asgn_compose'.
+  - eapply Asrt'; eauto.
+    cbn.
+    rewrite Bapply_compose.
+    now apply BAnd_assoc. (*<- note reliance on syntactic associativity *)
+  - apply IHp1; auto.
+Qed.
+
+(* this is the remark(s) at the bottom of page 16 *)
+Lemma SE_semantic_step: forall p p' p'' σ σ' σ'' φ φ' φ'',
+    (p, σ, φ) =>* (p', σ', φ') ->
+    (p', σ', φ') ->s (p'', σ'', φ'') ->
+    (p, σ, φ) =>* (p'', σ'', φ'').
+Proof.
+  intros; inv H0;
+    (* solves the trivial steps *)
+    try (destruct H as (?φ & STAR & PC);
+         eexists;
+         split;
+         [ econstructor; [ |apply STAR ]; constructor
+         | apply PC]).
+  - destruct H as (?φ & STAR & PC).
+    eexists.
+    split.
+    + econstructor; [ |apply STAR ].
+      eapply Asrt'; eauto.
+    + now rewrite 2 denotB_and, PC.
+  - destruct H as (?φ & STAR & PC).
+    destruct (equiv_pc_step _ _ _ _ _ φ0 _ H2) as (?φ & ? & ?); auto.
+    eexists.
+    split.
+    + etransitivity; [ apply STAR| ].
+      econstructor; [ | reflexivity ].
+      econstructor; eauto.
+    + auto.
+Qed.
+
+Corollary SE_semantic_trans: forall p p' p'' σ σ' σ'' φ φ' φ'',
+    (p, σ, φ) =>* (p', σ', φ') ->
+    (p', σ', φ') ->* (p'', σ'', φ'') ->
+    (p, σ, φ) =>* (p'', σ'', φ'').
+Proof.
+  intros.
+  induction H0; auto.
+  destruct y as ((?& ?) &?), z as ((?& ?) &?).
+  eapply SE_semantic_step; eauto.
+Qed.
+
+Lemma SE_canonical_step: forall p0 p q s b σ σ0 φ φ0,
+    (p0, s, b) ->s (q, σ, φ) ->
+    (p, σ0, φ0) =>* (p0, compose_subs σ0 s, BAnd φ0 (Bapply σ0 b)) ->
+    (p, σ0, φ0) =>* (q, compose_subs σ0 σ, BAnd φ0 (Bapply σ0 φ)).
+  Proof.
+    intros.
+    generalize dependent p.
+    dependent induction H;intros;
+      (* solves the trivial steps *)
+      try (destruct H0 as (?φ & STAR & PC);
+           eexists;
+           split;
+           [ econstructor; [ |apply STAR ]; constructor
+           | apply PC]).
+
+    (* asgn *)
+    - destruct H0 as (?φ & STAR & PC).
+      eexists.
+      split.
+      + econstructor; [ |apply STAR ].
+        eapply Asgn'; auto.
+        now rewrite asgn_compose'.
+      + apply PC.
+    (* asrt *)
+    - destruct H0 as (?φ & STAR & PC).
+      eexists.
+      split.
+      + econstructor; [ |apply STAR ].
+        eapply Asrt'; eauto.
+      + rewrite 2 denotB_and, PC.
+        rewrite denotB_and.
+        rewrite 3 inverse_denotB.
+        rewrite denotB_and.
+        rewrite inverse_intersection.
+        rewrite inverse_denotB.
+        rewrite inverse_inverse, compose_sub_spec.
+        now rewrite intersect_assoc.
+    (* sequencing *)
+Admitted.
+
+Lemma SE_canonical: forall p q σ φ,
+    (p, id_sub, BTrue) ->* (q, σ, φ) ->
+    forall σ0 φ0,
+      (p, σ0, φ0) =>* (q, compose_subs σ0 σ, BAnd φ0 (Bapply σ0 φ)).
+Proof.
+  intros.
+  dependent induction H.
+  - exists φ0.
+    split.
+    + rewrite compose_subs_id'.
+      reflexivity.
+    + cbn.
+      now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
+  - destruct y as ((? & ?) &?).
+    pose proof IHclos_refl_trans_n1 _ _ _ _ JMeq_refl JMeq_refl.
+    destruct (H1 σ0 φ0) as (?φ & STAR & PC).
+    eapply SE_semantic_step; eauto.
+    now apply compose_step.
+Qed.
+
 Lemma seq_canonical: forall p1 p2 σ1 σ2 φ1 φ2,
     (p1, id_sub, BTrue) ->* (PSkip, σ1, φ1) ->
     (p2, id_sub, BTrue) ->* (PSkip, σ2, φ2) ->
     (<{ p1; p2 }>, id_sub, BTrue) =>*
       (<{ skip }>, compose_subs σ1 σ2, BAnd φ1 (Bapply σ1 φ2)).
 Proof.
-  Admitted.
-(*   intros. *)
-(*   transitivity (<{skip ; p2}>, σ1, φ1). *)
-(*   - now apply seq_star. *)
-(*   - apply clos_rt1n_rtn1. econstructor. *)
-(*     + apply Skip_step. *)
-(*     + apply clos_rtn1_rt1n. *)
-(*       now apply SE_canonical. *)
-(* Qed. *)
+  intros.
+  revert H0.
+  dependent induction H; intros.
+  - rewrite compose_subs_id, Bapply_id.
+    exists φ2.
+    split.
+    + apply clos_rt1n_rtn1.
+      econstructor.
+      * apply Skip_step.
+      * apply clos_rtn1_rt1n.
+        apply H0.
+    + now rewrite denotB_and, denotB_top, intersect_full.
+  - destruct y as ((?&?)&?).
+    pose proof SE_canonical _ _ _ _ H1 σ1 φ1 as (?φ & ? & ?).
+    eexists.
+    split.
+    + epose proof seq_star _ _ _ _ _ _ _ H0.
+      transitivity (<{skip ; p2}>, σ1, φ1).
+      * econstructor; [ |apply H4].
+        now constructor.
+      * apply clos_rt1n_rtn1.
+        econstructor.
+        apply Skip_step.
+        apply clos_rtn1_rt1n.
+        apply H2.
+    + auto.
+Qed.
 
 Lemma loop_complete: forall p t,
     (forall (σ : sub) (φ : Bexpr),
@@ -430,31 +611,33 @@ Theorem completeness : forall p σ φ,
     In _ (denot__S p) (σ, φ) ->
     (p, id_sub, BTrue) =>* (PSkip, σ, φ).
 Proof.
-  induction p; intros;
-    destruct H as (t & DENOT & -> & ->).
-  - inv DENOT.
+  induction p; intros.
+  - destruct H as (t & DENOT & -> & ->).
+    inv DENOT.
     eexists.
     split; eauto.
     cbn; constructor.
-  - inv DENOT.
+  - destruct H as (t & DENOT & -> & ->).
+    inv DENOT.
     eexists.
     split; auto.
     cbn.
     econstructor; [ | reflexivity ].
     eapply Asgn' with (σ:=id_sub); eauto.
     now rewrite Aapply_id.
-  - inv DENOT.
+  - destruct H as (t & DENOT & -> & ->).
+    inv DENOT.
     exists <{BTrue && b}>.
     split; auto.
     cbn.
     econstructor; [ | reflexivity ].
     eapply Asrt' with (φ:=BTrue) (b:=b); eauto.
     now rewrite Bapply_id.
-  - destruct DENOT as (u & v & ? & ? & ->).
-    apply trace_to_denotS in H, H0.
+  - rewrite denotS_spec_seq in H.
+    destruct H as (σp & σq & φp & φq & ? & ? & -> & ->).
     apply IHp1 in H.
-    destruct H as (?φ & ? & ?).
     apply IHp2 in H0.
+    destruct H as (?φ & ? & ?).
     destruct H0 as (?φ & ? & ?).
     assert (In _ (denot__S <{ skip }>) (id_sub, BTrue)) as SKIP by (exists TSkip; split; easy).
     pose proof canonical_soundness _ _ _ _ _ _ H SKIP as (?φ & ? & ?).
@@ -462,15 +645,14 @@ Proof.
     pose proof seq_canonical _ _ _ _ _ _ H H0 as (?φ & ? & ?).
     eexists φ3.
     split.
-    + rewrite sub_trace_app.
-      apply H7.
-    + rewrite pc_trace_app.
-      rewrite H8.
+    + apply H7.
+    + rewrite H8.
       rewrite 2 denotB_and.
       rewrite H1.
       rewrite 2 inverse_denotB.
       now rewrite H2.
-  - inv DENOT.
+  - destruct H as (t & DENOT & -> & ->).
+    inv DENOT.
     + apply trace_to_denotS in H.
       apply IHp1 in H.
       destruct H as (?φ & ? & ?).
@@ -487,7 +669,8 @@ Proof.
       etransitivity; [ | apply H ].
       econstructor; [ |reflexivity ].
       apply Ndet_step_r.
-  - now apply loop_complete.
+  - destruct H as (t & DENOT & -> & ->).
+    now apply loop_complete.
 Qed.
 
 Print Assumptions soundness.

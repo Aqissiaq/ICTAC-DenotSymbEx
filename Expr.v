@@ -28,3 +28,7 @@ Notation "x + y"   := (APlus x y) (in custom com at level 70, no associativity).
 Notation "x <= y"  := (BLeq x y) (in custom com at level 70, no associativity).
 Notation "'~' b"   := (BNot b) (in custom com at level 75, right associativity).
 Notation "x && y"  := (BAnd x y) (in custom com at level 80, left associativity).
+
+Open Scope com_scope.
+Axiom BAnd_assoc: forall b1 b2 b3,
+    <{b1 && (b2 && b3)}> = <{(b1 && b2) && b3}>.
