@@ -2,10 +2,10 @@
 Coq mechanization of "Fully Symbolic Semantics"
 
 ## Contents
-The development follows the paper (except for DL, for now), with one file per section.
-### Main results
-- [Traces](./Traces) covers section 3.
-- [Programs](./Programs.v) covers section 5 and 6, and
+The development follows the paper (except for DL, for now), split between:
+- [Traces](./Traces) covers section 3,
+- [Programs](./Programs.v) covers section 5 and 6,
+- [Deterministic.v](./Deterministic.v) covers section 5.2 (the while-fragment of programs), and
 - [Operational](./Operational.v) covers section 7
     
 ### Auxilliary materials
@@ -19,6 +19,10 @@ The included Makefile (created for Coq 8.16.1) should allow just
 ```sh
 make
 ```
+The output includes the assumptions of key theorems:
+- function extensionality for equality of states
+- ensemble extensionality for extensional equality of sets
+- eq_rect for dependent induction on the operational semantics
 
 To update the Makefile use
 ```sh

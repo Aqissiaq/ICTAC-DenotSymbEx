@@ -1,14 +1,18 @@
 (** Results about the While language (5.2)*)
+
+(* This file culminates in encoding_deterministic which corresponds to Lemma 9
+Before we get there, we need to characterize the denotation of loops, called Fₘ
+in the paper proof of lemma 9, and then prove that at most one such Fₘ will be
+inhabited. The final proof is necessarily non-constructive, since determining
+whether the denotation of a loop is inhabited is essentially the halting
+problem. *)
 From Coq Require Import
-                 Strings.String
-                 Bool.Bool
-                 Init.Datatypes
                  Lists.List
-                 Logic.FunctionalExtensionality (* for equality of substitutions *)
                  Ensembles
                  Psatz
                  Arith
-                 Classes.RelationClasses.
+                 Classical.
+Import ListNotations.
 
 From BigStepSymbEx Require Import
   Utils
@@ -16,115 +20,14 @@ From BigStepSymbEx Require Import
   Maps
   Syntax
   Traces
-  Programs
-  Limits
-.
-
-Import NonDet WhileNotations.
-Import Trace.
+  Programs.
+Import NonDet WhileNotations Trace.
 Open Scope com_scope.
-
-From Coq Require Import Classical.
 
 Definition deterministic: Prg -> Prop :=
   fun p => forall V, sub_singleton (denot_fun_nondet p V).
 
-(* TODO: utils *)
-Lemma set_compose_inv{X Y Z: Type}: forall (f:X -> Ensemble Y) (g:Y -> Ensemble Z) x z,
-    set_compose f g x = Singleton _ z ->
-    forall y, In _ (f x) y -> Included _ (g y)  (Singleton _ z).
-Proof.
-  intros.
-  intros ?z ?.
-  rewrite <- H.
-  exists y.
-  split; auto.
-Qed.
-
-Lemma set_compose_inv'{X Y Z: Type}: forall (f:X -> Ensemble Y) (g:Y -> Ensemble Z) x z,
-    set_compose f g x = Singleton _ z ->
-    exists y, In _ (f x) y /\ Included _ (g y) (Singleton _ z).
-Proof.
-  intros.
-  assert (In _ (set_compose f g x) z) by (rewrite H; easy).
-  destruct H0 as (?y & ? & ?).
-  exists y.
-  split; auto.
-  eapply set_compose_inv; eauto.
-Qed.
-
-Lemma option_inversion' {X Y: Type} {x: option X} {f: X -> option Y} {y: Y}:
-  ( exists x', x = Some x' /\ f x' = Some y) ->
-  option_bind x f = Some y.
-Proof.
-  intros (?x & ? & ?).
-  rewrite H; now cbn.
-Qed.
-
-Lemma sub_singleton_n_fold_set{X:Type}: forall n f (x:X),
-    (forall x, sub_singleton (f x)) ->
-    sub_singleton (n_fold_set n f x).
-Proof.
-  induction n; intros.
-  - apply sub_singleton_singleton.
-  - cbn.
-    apply sub_singleton_set_compose_first; auto.
-Qed.
-
-Lemma singleton_not_empty{X:Type}: forall x, Empty_set _ <> Singleton X x.
-Proof.
-  intros x ?.
-  assert (In _ (Singleton _ x) x) by easy.
-  rewrite <- H in H0.
-  inv H0.
-Qed.
-
-Lemma union_fam_singleton{X I:Type}: forall (F: I -> Ensemble X) x,
-    (exists i, F i = Singleton _ x /\ forall j, j <> i -> F j = Empty_set _) ->
-    Union_Fam F = Singleton _ x.
-Proof.
-  intros F x (?i & ? & ?).
-  apply Extensionality_Ensembles.
-  split; intros ?y ?.
-  - inv H1.
-    destruct (classic (i = i0)) as [-> | ?].
-    + rewrite H in H2.
-      now inv H2.
-    + rewrite H0 in H2; auto.
-      inv H2.
-  - exists i.
-    inv H1.
-    now rewrite H.
-Qed.
-
-Lemma union_fam_empty {X I:Type}: forall (F: I -> Ensemble X),
-    (forall i, F i = Empty_set _) -> Union_Fam F = Empty_set _.
-Proof.
-  intros.
-  apply Extensionality_Ensembles.
-  split; intros ?y ?.
-  - inv H0.
-    rewrite (H i) in H1.
-    inv H1.
-  - inv H0.
-Qed.
-
-Lemma union_fam_sub_singleton{X I:Type}: forall (F: I -> Ensemble X),
-    (exists x i, F i = Singleton _ x /\ forall j, j <> i -> F j = Empty_set _)
-    \/ (forall i, F i = Empty_set _) ->
-    sub_singleton (Union_Fam F).
-Proof.
-  intros F [(?x & ?i & ? & ?) | ?].
-  - right.
-    exists x.
-    apply union_fam_singleton.
-    exists i.
-    split; auto.
-  - left.
-    now apply union_fam_empty.
-Qed.
-
-(* this is Fₘ from the proof of lemma 9 *)
+(* this is Fₘ *)
 Definition m_loop m b q V :=
   set_compose (n_fold_set m (denot_fun_nondet (PSeq (PAsrt b) q))) (denot_fun_nondet (PAsrt <{~b}>)) V.
 
@@ -170,154 +73,9 @@ Proof.
       * apply H.
 Qed.
 
-Import ListNotations.
-
-(* how is this not in List.v? *)
-Lemma head_app {X:Type}: forall (xs:list X) (x: X),
-    xs <> [] ->
-    forall d,
-      hd d (xs ++ [x]) = hd d xs.
-Proof.
-  induction xs; auto.
-  intros.
-  exfalso.
-  now apply H.
-Qed.
-
-Lemma last_cons {X:Type}: forall (xs:list X) (x: X),
-    xs <> [] ->
-    forall d,
-    last (x::xs) d = last xs d.
-Proof.
-  destruct xs; intros.
-  - exfalso.
-    now apply H.
-  - pose proof exists_last H as (?l & ?x & ->).
-    replace (x0 :: l ++ [x1]) with ((x0 :: l) ++ [x1]) by auto.
-    now rewrite 2 last_last.
-Qed.
-
-Lemma last_non_empty {X:Type}: forall (xs:list X),
-    xs <> [] ->
-    forall d d',
-      last xs d = last xs d'.
-Proof.
-  intros.
-  pose proof exists_last H as (?l & ? & ->).
-  now rewrite 2 last_last.
-Qed.
-
-Lemma head_non_empty {X:Type}: forall (xs:list X),
-    xs <> [] ->
-    forall d d',
-      hd d xs = hd d' xs.
-Proof.
-  destruct xs; auto.
-  intros.
-  exfalso.
-  now apply H.
-Qed.
-
-Lemma nth_cons {X:Type}: forall (xs:list X) j x,
-    xs <> [] ->
-    forall d,
-      nth j xs d = nth (S j) (x::xs) d.
-Proof.
-  induction xs; intros.
-  - exfalso.
-    now apply H.
-  - destruct j; auto.
-Qed.
-
-Lemma nth_last {X:Type}: forall (xs: list X),
-  forall d,
-    last xs d = nth (pred (length xs)) xs d.
-Proof.
-  induction xs; intros; auto.
-  destruct xs; auto.
-  replace (length (a :: x :: xs)) with (S (S (length xs))); auto.
-  rewrite Nat.pred_succ.
-  rewrite <- nth_cons.
-  rewrite last_cons.
-  apply IHxs.
-  all: easy.
-Qed.
-
-Lemma nth_length_cons{X:Type}: forall (xs: list X) x,
-    xs <> [] ->
-    forall d,
-      (nth (length xs) (x :: xs) d) = last xs d.
-Proof.
-  induction xs using rev_ind; intros.
-  - exfalso.
-    now apply H.
-  - rewrite app_length, last_last.
-    replace (length xs + length [x]) with (S (length xs)).
-    rewrite <- nth_cons, app_nth2.
-    now replace (length xs - length xs) with 0 by lia.
-    all: auto; cbn; lia.
-Qed.
-
-Lemma nth_length_app{X:Type}: forall (xs: list X) x,
-    xs <> [] ->
-    forall d,
-      (nth (length xs) (xs ++ [x]) d) = x.
-Proof.
-  induction xs; intros.
-  - exfalso.
-    now apply H.
-  - cbn.
-    rewrite app_nth2; auto.
-    now replace (length xs - length xs) with 0 by lia.
-Qed.
-
-Lemma length_one_iff_singl {A:Type} (l : list A):
-  length l = 1 <-> (exists a, l = [a]).
-Proof.
-  split.
-  - destruct l; intros; inv H.
-    apply length_zero_iff_nil in H1.
-    exists a.
-    now rewrite H1.
-  - now intros (?a & ->).
-Qed.
-
-(* getting silly now *)
-Lemma length_two_iff {A:Type} (l : list A):
-  length l = 2 <-> (exists a1 a2, l = [a1 ; a2]).
-Proof.
-  split.
-  - destruct l; intros; inv H.
-    apply length_one_iff_singl in H1.
-    destruct H1 as (?a & ->).
-    now exists a, a0.
-  - now intros (?a & ?a & ->).
-Qed.
-
-Lemma length_SSm_iff {A:Type} (l : list A) m:
-  length l = S (S m) <-> (exists a1 a2 l', l = [a1] ++ l' ++ [a2] /\ length l' = m).
-Proof.
-  split.
-  - generalize dependent l.
-    induction m; intros.
-    + apply length_two_iff in H.
-      destruct H as (?a & ?a & ->).
-      exists a, a0, [].
-      easy.
-    + destruct l; inv H.
-      pose proof IHm l H1 as (?a & ?a & ?l & -> & ?).
-      exists a, a1, (a0 ::l0).
-      split; auto.
-      cbn.
-      now rewrite H0.
-  - intros (a1 & a2 & l' & -> & ?).
-    rewrite 2 app_length.
-    cbn.
-    rewrite H.
-    lia.
-Qed.
-
-(*a pointless dummy since the lists are always non-empty*)
+(* Fₘ is characterized in terms of finite lists of valuations. For the head and
+last functions we provide a default – it is never used, but simplifies the
+presentation somehwat *)
 Definition Vd : Valuation := (_ !-> 0).
 
 Lemma in_m_loop_charact: forall m b q V V',
@@ -592,7 +350,7 @@ Proof.
   destruct (not_eq _ _ H1).
   - pose proof H2 m H4 as (?&_).
     rewrite <- H3 in H5; auto.
-    pose proof nth_last Vs Vd.
+    pose proof nth_last _ Vs Vd.
     rewrite LEN in H6.
     cbn in H6.
     rewrite <- H6 in H5.
@@ -600,7 +358,7 @@ Proof.
     discriminate.
     - pose proof H0 l H4 as (?&_).
       rewrite H3 in H5; auto.
-      pose proof nth_last Vs0 Vd.
+      pose proof nth_last _ Vs0 Vd.
       rewrite LEN0 in H6.
       cbn in H6.
       rewrite <- H6 in H5.
@@ -635,7 +393,7 @@ Proof.
   - rewrite while_m_loop.
     (* here we need LEM to solve the halting problem in a poor disguise *)
     destruct (classic (Inhabited _ (Union_Fam (fun n : nat => m_loop n b (encode s) V))))
-      as [(?V & ?) | ?]; apply union_fam_sub_singleton.
+      as [(?V & ?) | ?]; apply (union_fam_sub_singleton nat_eq_dec).
     + inv H.
       left.
       exists V0, i.
@@ -652,4 +410,5 @@ Proof.
       now exists V0, i.
 Qed.
 
+Type encoding_deterministic.
 Print Assumptions encoding_deterministic.

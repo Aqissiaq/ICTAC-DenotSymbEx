@@ -1,23 +1,20 @@
-From Coq Require Import
-                 Strings.String
-                 Bool.Bool
-                 Init.Datatypes
-                 Lists.List
-                 Logic.FunctionalExtensionality (* for equality of substitutions *)
-                 Ensembles
-                 Psatz
-                 Classes.RelationClasses.
+(** Section 3: Traces*)
+(* This file contains the concrete and symbolic semantics of traces, as well as
+the results from section 3. It culminates in trace_correspondence, corresponding
+to Theorem 1 *)
+
+From Coq Require Import Bool.Bool.
 
 From BigStepSymbEx Require Import
-Expr
-Maps
-Syntax
-Utils.
+  Expr
+  Maps
+  Syntax
+  Utils.
 
 Import Trace TraceNotations.
 Open Scope com_scope.
 
-(** Concrete semantics *)
+(* Definition 2: Concrete semantics *)
 Fixpoint denot_fun (p: Trc) (V: Valuation): option Valuation :=
   match p with
   | <{skip}> => Some V
@@ -26,8 +23,7 @@ Fixpoint denot_fun (p: Trc) (V: Valuation): option Valuation :=
   | <{p1 ; p2}> => option_bind (denot_fun p1 V) (denot_fun p2)
   end.
 
-(** Symbolic Semantics *)
-(* TODO: cleanup *)
+(* Definition 3: Symbolic Semantics *)
 Fixpoint trace_denot__S (t:Trc): sub * Bexpr :=
   match t with
   | <{skip}> => (id_sub, BTrue)
@@ -39,6 +35,7 @@ Fixpoint trace_denot__S (t:Trc): sub * Bexpr :=
       (compose_subs s1 s2, BAnd b1 (Bapply s1 b2))
   end.
 
+(** 3.2: substitutions *)
 Definition Sub (t:Trc) := fst (trace_denot__S t).
 
 Inductive Sub_spec: Trc -> sub -> Prop :=
@@ -71,6 +68,11 @@ Proof.
     now subst.
 Qed.
 
+Ltac Sub_spec_unfold p :=
+  let H := fresh in epose proof Sub_spec_correct p as (H&_);
+                    specialize (H eq_refl);
+                    inv H.
+
 Lemma Sub_unit_l: forall t,
     Sub (TSeq TSkip t) = Sub t.
 Proof.
@@ -90,7 +92,53 @@ Proof.
   now rewrite compose_subs_id'.
 Qed.
 
+Lemma not_none_monotone: forall V t1 t2,
+    denot_fun <{t1 ; t2}> V <> None ->
+    denot_fun t1 V <> None.
+Proof.
+  cbn; unfold option_bind; intros.
+  destruct (denot_fun t1 V); easy.
+Qed.
+
+Lemma not_none_monotone': forall V V' t1 t2,
+    denot_fun <{t1 ; t2}> V <> None ->
+    denot_fun t1 V = Some V' ->
+    denot_fun t2 V' <> None.
+Proof.
+  cbn; unfold option_bind; intros.
+  now rewrite H0 in H.
+Qed.
+
+(* Lemma 4 *)
+Lemma trace_sub_correct: forall t V,
+    denot_fun t V <> None ->
+    denot_fun t V = Some (denot_sub (Sub t) V).
+Proof.
+  induction t; intros;
+    unfold denot_sub, Sub; cbn.
+  - now rewrite comp_id.
+  - now rewrite (asgn_sound' V x e).
+  - cbn in H.
+    destruct (Beval V b).
+    + now rewrite comp_id.
+    + contradiction.
+  - destruct (trace_denot__S t1) eqn:?, (trace_denot__S t2) eqn:?.
+    pose proof not_none_monotone _ _ _ H.
+    apply IHt1 in H0.
+    pose proof not_none_monotone' _ _ _ _ H H0.
+    apply IHt2 in H1.
+    cbn in H.
+    destruct (denot_fun t1 V) eqn:?; simpl; [ |contradiction].
+    inv H0.
+    unfold denot_sub, Sub in *;
+      rewrite Heqp, Heqp0 in *;
+      cbn in *.
+    now rewrite H1, compose_comp.
+Qed.
+
+(** 3.3: Path Conditions *)
 Definition PC (t:Trc) := snd (trace_denot__S t).
+
 Inductive PC_spec: Trc -> Bexpr -> Prop :=
 | PC_spec_empty: PC_spec TSkip BTrue
 | PC_spec_asrt: forall b, PC_spec <{b?}> b
@@ -129,62 +177,14 @@ Proof.
     now subst.
 Qed.
 
-Lemma not_none_monotone: forall V t1 t2,
-    denot_fun <{t1 ; t2}> V <> None ->
-    denot_fun t1 V <> None.
-Proof.
-  cbn; unfold option_bind; intros.
-  destruct (denot_fun t1 V); easy.
-Qed.
-
-Lemma not_none_monotone': forall V V' t1 t2,
-    denot_fun <{t1 ; t2}> V <> None ->
-    denot_fun t1 V = Some V' ->
-    denot_fun t2 V' <> None.
-Proof.
-  cbn; unfold option_bind; intros.
-  now rewrite H0 in H.
-Qed.
-
-Lemma asgn_sound': forall V x e,
-    (Comp V (x !-> e ; id_sub)) = (x !-> Aeval V e ; V).
-Proof.
-  intros.
-  pose proof asgn_sound V id_sub x e.
-  rewrite comp_id, Aapply_id in H.
-  apply H.
-Qed.
-
-(** Lemma 4 *)
-Lemma trace_sub_correct: forall t V,
-    denot_fun t V <> None ->
-    denot_fun t V = Some (denot_sub (Sub t) V).
-Proof.
-  induction t; intros;
-    unfold denot_sub, Sub; cbn.
-  - now rewrite comp_id.
-  - now rewrite (asgn_sound' V x e).
-  - cbn in H.
-    destruct (Beval V b).
-    + now rewrite comp_id.
-    + contradiction.
-  - destruct (trace_denot__S t1) eqn:?, (trace_denot__S t2) eqn:?.
-    pose proof not_none_monotone _ _ _ H.
-    apply IHt1 in H0.
-    pose proof not_none_monotone' _ _ _ _ H H0.
-    apply IHt2 in H1.
-    cbn in H.
-    destruct (denot_fun t1 V) eqn:?; simpl; [ |contradiction].
-    inv H0.
-    unfold denot_sub, Sub in *;
-      rewrite Heqp, Heqp0 in *;
-      cbn in *.
-    now rewrite H1, compose_comp.
-Qed.
+Ltac PC_spec_unfold p :=
+  let H := fresh in epose proof PC_spec_correct p as (H&_);
+                    specialize (H eq_refl);
+                    inv H.
 
 Notation "V |= b" := (Beval V b = true) (at level 90).
 
-(** Lemma 5 *)
+(* Lemma 5 *)
 Lemma trace_correspondence_aux: forall t V,
     denot_fun t V <> None <-> V |= PC t.
 Proof.
@@ -250,7 +250,7 @@ Proof.
            now rewrite H0.
 Qed.
 
-(** Theorem 1 *)
+(* Theorem 1 *)
 Theorem trace_correspondence: forall t V V',
     denot_fun t V = Some V' <-> (V |= PC t) /\ denot_sub (Sub t) V = V'.
 Proof.
@@ -271,6 +271,5 @@ Proof.
     now rewrite H1.
 Qed.
 
+Type trace_correspondence.
 Print Assumptions trace_correspondence.
-
-(*TODO: The DL stuff? *)

@@ -1,8 +1,11 @@
+(** Section 7: Operational Symbolic Semantics *)
+(* This file contains the developments of section 7. We inductively define a
+small-step operational semantics and show its correspondence to the denotational
+semantics by way of canonical sequences. *)
 From Coq Require Import
   Program.Equality
   Relations
   Classes.RelationClasses
-  Logic.FunctionalExtensionality
   Ensembles.
 
 From BigStepSymbEx Require Import
@@ -43,6 +46,7 @@ Inductive Sstep : relation SConfig :=
     (<{p*}>, sig, phi) ->s (<{p ; p*}>, sig, phi)
   where " c '->s' c' " := (Sstep c c').
 
+(* these alternate formulations are sometimes more convenient in conjunction with eapply *)
 Lemma Asgn': forall p q σ σ' φ φ' x e,
     p = <{x := e}> ->
     q = PSkip ->
@@ -70,7 +74,8 @@ Qed.
 Definition multi_Sstep := clos_refl_trans_n1 _ Sstep.
 Notation " c '->*' c' " := (multi_Sstep c c') (at level 40).
 
-(* Lemma 10 *)
+(* Proposition 3, in four parts *)
+(*(i)*)
 Lemma if_T: forall b p q sig phi,
     (encode (If b p q), sig, phi) ->* (encode p, sig, BAnd phi (Bapply sig b)).
 Proof.
@@ -85,6 +90,7 @@ Proof.
   constructor.
 Qed.
 
+(*(ii)*)
 Lemma if_F: forall b p q sig phi,
     (encode (If b p q), sig, phi) ->* (encode q, sig, BAnd phi (Bapply sig <{~b}>)).
 Proof.
@@ -99,6 +105,7 @@ Proof.
   constructor.
 Qed.
 
+(*(iii)*)
 Lemma while_T: forall b p sig phi,
     (encode (While b p), sig, phi) ->* (encode (Seq p (While b p)), sig, BAnd phi (Bapply sig b)).
 Proof.
@@ -116,6 +123,7 @@ Proof.
   constructor.
 Qed.
 
+(*(iv)*)
 Lemma while_F: forall b p sig phi,
     (encode (While b p), sig, phi) ->* (encode Skip, sig, BAnd phi (Bapply sig <{~b}>)).
 Proof.
@@ -146,7 +154,7 @@ Proof.
   split; auto.
 Qed.
 
-(*NOTE: Erik claims iff, but I don't think the condition on φ is strong enough *)
+(* Lemma 11 *)
 Lemma canonical_SE_step: forall p q σ σ' φ φ',
     (p, σ, φ) ->s (q, σ', φ') -> exists σc φc,
         (p, id_sub, BTrue) ->s (q, σc, φc)
@@ -209,6 +217,9 @@ Proof.
       now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
 Qed.
 
+(* The above does not necessarily hold in the other direction – semantically
+equivalent path conditions are not strong enough to ensure we can take a step.
+Luckily we only need one direction for the results *)
 Lemma SE_canonical_step: forall p q σ σ' φ φ',
     (exists σc φc,
         (p, id_sub, BTrue) ->s (q, σc, φc)
@@ -364,7 +375,7 @@ Proof.
       now rewrite <- intersect_assoc.
 Qed.
 
-(* Theorem 4 *)
+(* Theorem 3 *)
 Theorem soundness: forall p σ φ,
     (p, id_sub, BTrue) ->* (PSkip, σ, φ) ->
     In' (denot__S p) (σ, φ).
@@ -378,6 +389,7 @@ Proof.
   now rewrite denotB_and, denotB_top, intersect_comm, intersect_full.
 Qed.
 
+(* Completeness (theorem 4) is a little more involved and requires some more setup*)
 Lemma trace_to_denotS: forall p t,
     In _ (traces_of p) t ->
     In _ (denot__S p) (Sub t, PC t).
@@ -475,46 +487,6 @@ Proof.
   eapply SE_semantic_step; eauto.
 Qed.
 
-Lemma SE_canonical_step: forall p0 p q s b σ σ0 φ φ0,
-    (p0, s, b) ->s (q, σ, φ) ->
-    (p, σ0, φ0) =>* (p0, compose_subs σ0 s, BAnd φ0 (Bapply σ0 b)) ->
-    (p, σ0, φ0) =>* (q, compose_subs σ0 σ, BAnd φ0 (Bapply σ0 φ)).
-  Proof.
-    intros.
-    generalize dependent p.
-    dependent induction H;intros;
-      (* solves the trivial steps *)
-      try (destruct H0 as (?φ & STAR & PC);
-           eexists;
-           split;
-           [ econstructor; [ |apply STAR ]; constructor
-           | apply PC]).
-
-    (* asgn *)
-    - destruct H0 as (?φ & STAR & PC).
-      eexists.
-      split.
-      + econstructor; [ |apply STAR ].
-        eapply Asgn'; auto.
-        now rewrite asgn_compose'.
-      + apply PC.
-    (* asrt *)
-    - destruct H0 as (?φ & STAR & PC).
-      eexists.
-      split.
-      + econstructor; [ |apply STAR ].
-        eapply Asrt'; eauto.
-      + rewrite 2 denotB_and, PC.
-        rewrite denotB_and.
-        rewrite 3 inverse_denotB.
-        rewrite denotB_and.
-        rewrite inverse_intersection.
-        rewrite inverse_denotB.
-        rewrite inverse_inverse, compose_sub_spec.
-        now rewrite intersect_assoc.
-    (* sequencing *)
-Admitted.
-
 Lemma SE_canonical: forall p q σ φ,
     (p, id_sub, BTrue) ->* (q, σ, φ) ->
     forall σ0 φ0,
@@ -606,7 +578,7 @@ Proof.
       now rewrite H3.
 Qed.
 
-(* Theorem 5 *)
+(* Theorem 4 *)
 Theorem completeness : forall p σ φ,
     In _ (denot__S p) (σ, φ) ->
     (p, id_sub, BTrue) =>* (PSkip, σ, φ).
@@ -673,5 +645,8 @@ Proof.
     now apply loop_complete.
 Qed.
 
+Type soundness.
 Print Assumptions soundness.
+
+Type completeness.
 Print Assumptions completeness.

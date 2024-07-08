@@ -1,12 +1,12 @@
+(** Section 5 and 6: Programs and Symbolic Semantics*)
+(* This file contains the developments and results about nondeterministic
+programs: the concrete and symbolic semantics of programs and the results
+connecting the two. Well-formed (While) programs are handled separately in
+Determinism.v*)
 From Coq Require Import
-                 Strings.String
                  Bool.Bool
-                 Init.Datatypes
-                 Lists.List
-                 Logic.FunctionalExtensionality (* for equality of substitutions *)
-                 Ensembles
-                 Psatz
-                 Classes.RelationClasses.
+                 Logic.FunctionalExtensionality 
+                 Ensembles.
 
 From BigStepSymbEx Require Import
   Utils
@@ -19,7 +19,6 @@ Import NonDet NonDetNotations.
 Import Trace.
 Open Scope com_scope.
 
-(** Concrete semantics *)
 (* Definition 9 *)
 Fixpoint denot_fun_nondet (p: Prg) (V: Valuation): Ensemble Valuation :=
   match p with
@@ -31,7 +30,7 @@ Fixpoint denot_fun_nondet (p: Prg) (V: Valuation): Ensemble Valuation :=
   | PSeq p1 p2 => set_compose (denot_fun_nondet p1) (denot_fun_nondet p2) V
   end.
 
-(* Lemma 6 *)
+(* Lemma 7 (unfolding) *)
 Lemma unfolding_iterations: forall p,
     denot_fun_nondet <{p*}> = denot_fun_nondet (PChoice PSkip (PSeq p <{p*}>)).
 Proof.
@@ -57,6 +56,28 @@ Proof.
       split; auto.
 Qed.
 
+(* Lemma 7 (distributes) *)
+Lemma choice_distributes: forall p q r,
+    denot_fun_nondet <{(p (+) q) ; r}> = denot_fun_nondet <{(p ; r) (+) (q ; r)}>.
+Proof.
+  intros.
+  extensionality V.
+  apply Extensionality_Ensembles.
+  split;cbn; intros ?V ?.
+  - destruct H as (?V & [?V | ?V] & ?).
+    + left.
+      now exists V2.
+    + right.
+      now exists V2.
+  - destruct H as [?V | ?V].
+    + destruct H as (?V & ? & ?).
+      exists V1; split; auto.
+      now left.
+    + destruct H as (?V & ? & ?).
+      exists V1; split; auto.
+      now right.
+Qed.
+
 Lemma denot_fun_unit_l: forall t, denot_fun t = denot_fun (TSeq TSkip t).
 Proof. destruct t; auto. Qed.
 
@@ -72,17 +93,6 @@ Proof.
     destruct (denot_fun t1 V); simpl; auto.
     destruct (denot_fun t2 v); simpl; auto.
 Qed.
-
-Ltac Sub_spec_unfold p :=
-  let H := fresh in epose proof Sub_spec_correct p as (H&_);
-                    specialize (H eq_refl);
-                    inv H.
-
-Ltac PC_spec_unfold p :=
-  let H := fresh in epose proof PC_spec_correct p as (H&_);
-                    specialize (H eq_refl);
-                    inv H.
-
 
 Fixpoint n_fold_seq (n:nat) (ts: Ensemble Trc): Ensemble Trc :=
   match n with
@@ -120,7 +130,7 @@ Proof.
     split; auto.
 Qed.
 
-(* Lemma 7 *)
+(* Lemma 8 *)
 Lemma traces_of_correspondence: forall p V,
     denot_fun_nondet p V = (fun V' => exists t, denot_fun t V = Some V' /\ In _ (traces_of p) t).
 Proof.
@@ -263,12 +273,10 @@ Proof.
 Qed.
 
 (** Symbolic Semantics *)
-(* Equation (1) *)
 Lemma denot_sub_sound: forall sigma V e,
     Aeval (denot_sub sigma V) e = Aeval V (Aapply sigma e).
 Proof. unfold denot_sub. intros. apply comp_sub. Qed.
 
-(* Equation (2) *)
 Lemma inverse_denotB: forall s b,
     denot__B (Bapply s b) = inverse_image (denot_sub s) (denot__B b).
 Proof.
@@ -287,6 +295,7 @@ Qed.
 
 Definition Branch: Type := sub * Bexpr.
 
+(* Definition 11 *)
 Definition denot__S (p: Prg): Ensemble Branch :=
   fun '(s, b) => exists t, In _ (traces_of p) t /\ s = Sub t /\ b = PC t.
 
@@ -362,7 +371,8 @@ Proof.
     now simpl in *; subst.
 Qed.
 
-(* Lemma 9 in four parts *)
+(* Lemma 10 in four parts *)
+(*10 (i)*)
 Lemma denotS_spec_seq: forall p q,
     denot__S (PSeq p q) = fun '(σ, φ) => exists σp σq φp φq,
                             In _ (denot__S p) (σp, φp)
@@ -401,6 +411,7 @@ Proof.
     + now rewrite H1, pc_trace_app.
 Qed.
 
+(*10 (ii)*)
 Lemma denotS_spec_choice: forall p q,
     denot__S (PChoice p q) = Union _ (denot__S p) (denot__S q).
 Proof.
@@ -429,8 +440,9 @@ Proof.
       now right.
 Qed.
 
-(* we need two definitions for (iii) *)
-(* also note that the formulation does not include an extra TSkip, since this is the 0-case of n_fold_PSeq *)
+(* For (iii) we need to define the n-fold composition of a program also note
+ that the formulation of denotS_spec_ind does not include an extra TSkip, since
+ this is the 0-case of n_fold_PSeq *)
 Fixpoint n_fold_PSeq (n:nat) (p:Prg): Prg :=
   match n with
   | 0 => PSkip
@@ -452,6 +464,7 @@ Proof.
     now apply IHn.
 Qed.
 
+(* 10 (iii)*)
 Lemma denotS_spec_ind: forall p,
     denot__S (PStar p) = Union_Fam (fun n:nat => denot__S (n_fold_PSeq n p)).
 Proof.
@@ -473,6 +486,7 @@ Proof.
     now apply n_fold_prg_trace.
 Qed.
 
+(* 10 (iv)*)
 Lemma denotS_spec_unfold: forall p,
     denot__S (PStar p) = Union _ (denot__S PSkip) (denot__S (PSeq p (PStar p))).
 Proof.
@@ -513,7 +527,7 @@ Proof.
       splits; auto.
 Qed.
 
-(* Theorem 3: in two parts *)
+(* Theorem 2: in two parts *)
 Lemma SE_complete: forall p V V',
     In _ (denot_fun_nondet p V) V' ->
     exists s b,
@@ -547,5 +561,8 @@ Proof.
   now apply trace_sub_correct.
 Qed.
 
+Type SE_correct.
 Print Assumptions SE_correct.
+
+Type SE_complete.
 Print Assumptions SE_complete.

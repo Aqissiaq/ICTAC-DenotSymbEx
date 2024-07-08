@@ -174,6 +174,10 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma comp_id : forall V,
+    Comp V id_sub = V.
+Proof. intros. extensionality x. reflexivity. Qed.
+
 Lemma asgn_sound : forall V s x e,
     Comp V (update s x (Aapply s e)) = update (Comp V s) x (Aeval (Comp V s) e).
 Proof. intros. extensionality y.
@@ -182,9 +186,14 @@ Proof. intros. extensionality y.
          reflexivity.
 Qed.
 
-Lemma comp_id : forall V,
-    Comp V id_sub = V.
-Proof. intros. extensionality x. reflexivity. Qed.
+Lemma asgn_sound': forall V x e,
+    (Comp V (x !-> e ; id_sub)) = (x !-> Aeval V e ; V).
+Proof.
+  intros.
+  pose proof asgn_sound V id_sub x e.
+  rewrite comp_id, Aapply_id in H.
+  apply H.
+Qed.
 
 Definition denot_sub (phi: sub): Valuation -> Valuation := fun V => Comp V phi.
 Notation "[| s |]" := (denot_sub s).
