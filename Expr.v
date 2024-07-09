@@ -13,6 +13,7 @@ Inductive Bexpr : Type :=
 | BFalse
 | BNot (b:Bexpr)
 | BAnd (b1 b2:Bexpr)
+| BImpl (b1 b2: Bexpr)
 | BLeq (a1 a2:Aexpr).
 
 Coercion AVar : string >-> Aexpr.
@@ -28,6 +29,7 @@ Notation "x + y"   := (APlus x y) (in custom com at level 70, no associativity).
 Notation "x <= y"  := (BLeq x y) (in custom com at level 70, no associativity).
 Notation "'~' b"   := (BNot b) (in custom com at level 75, right associativity).
 Notation "x && y"  := (BAnd x y) (in custom com at level 80, left associativity).
+Notation "x --> y"  := (BImpl x y) (in custom com at level 80, left associativity).
 
 Open Scope com_scope.
 Axiom BAnd_assoc: forall b1 b2 b3,

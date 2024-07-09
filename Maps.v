@@ -119,6 +119,7 @@ Fixpoint Bapply (s:sub) (e:Bexpr) : Bexpr :=
   | BFalse => BFalse
   | BNot b => BNot (Bapply s b)
   | BAnd b1 b2 => BAnd (Bapply s b1) (Bapply s b2)
+  | BImpl b1 b2 => BImpl (Bapply s b1) (Bapply s b2)
   | BLeq a1 a2 => BLeq (Aapply s a1) (Aapply s a2)
   end.
 
@@ -145,11 +146,12 @@ Fixpoint Beval (V:Valuation) (e:Bexpr) : bool :=
   | BFalse => false
   | BNot b => negb (Beval V b)
   | BAnd b1 b2 => (Beval V b1) && (Beval V b2)
+  | BImpl b1 b2 => implb (Beval V b1) (Beval V b2)
   | BLeq a1 a2 => (Aeval V a1) <=? (Aeval V a2)
   end.
 
-Notation "V |= b" := (Beval V b = true) (at level 90).
-Notation "V |/= b" := (Beval V b = false) (at level 90).
+Notation "V |= b" := (Beval V b = true) (at level 30).
+Notation "V |/= b" := (Beval V b = false) (at level 30).
 
 (** We can update a valuation with a substitution by composition
       and prove some useful properties *)
@@ -282,6 +284,7 @@ Proof.
   induction b; cbn; auto.
   - now rewrite IHb.
   - now rewrite IHb1, IHb2.
+  - now rewrite IHb1, IHb2.
   - now rewrite 2 Aapply_compose.
 Qed.
 
@@ -329,6 +332,32 @@ Proof.
   - destruct H.
     unfold denot__B, Ensembles.In. simpl. rewrite andb_true_iff.
     split; assumption.
+Qed.
+
+Lemma denotB_impl: forall b1 b2,
+    denot__B <{b1 --> b2}> = Union _ (Complement _ (denot__B b1)) (denot__B b2).
+Proof.
+  intros. apply Extensionality_Ensembles. split; intros V H.
+  - inversion H.
+    pose proof implb_true_iff (Beval V b1) (Beval V b2).
+    destruct (Beval V b1) eqn:?.
+    + apply H0 in H1; auto.
+      now right.
+    + left.
+      intro.
+      inversion H2.
+      rewrite H2 in Heqb.
+      discriminate.
+  - destruct H as [?V | ?V].
+    + unfold denot__B, Ensembles.In.
+      rewrite <- denotB_neg in H.
+      inversion H.
+      apply negb_true_iff in H1.
+      cbn.
+      now rewrite H1.
+    + unfold denot__B, Ensembles.In.
+      cbn.
+      destruct (Beval V b1); auto.
 Qed.
 
 Create HintDb denotB.

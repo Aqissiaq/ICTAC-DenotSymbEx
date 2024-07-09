@@ -285,6 +285,7 @@ Proof.
   - simpl. rewrite denotB_bot. rewrite inverse_empty. reflexivity.
   - simpl. rewrite 2 denotB_neg. rewrite IHb. rewrite inverse_complement. reflexivity.
   - simpl. rewrite 2 denotB_and. rewrite IHb1, IHb2. rewrite inverse_intersection. reflexivity.
+  - simpl. rewrite 2 denotB_impl. rewrite IHb1, IHb2. rewrite inverse_union. reflexivity.
   - apply Extensionality_Ensembles. split; intros V H.
     + inversion H. rewrite <- 2 denot_sub_sound in H1.
       unfold inverse_image, In. unfold denot_sub. apply H1.

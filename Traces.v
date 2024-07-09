@@ -182,8 +182,6 @@ Ltac PC_spec_unfold p :=
                     specialize (H eq_refl);
                     inv H.
 
-Notation "V |= b" := (Beval V b = true) (at level 90).
-
 (* Lemma 5 *)
 Lemma trace_correspondence_aux: forall t V,
     denot_fun t V <> None <-> V |= PC t.
@@ -269,6 +267,24 @@ Proof.
     apply H in H0.
     rewrite (trace_sub_correct _ _ H0).
     now rewrite H1.
+Qed.
+
+Corollary trace_correspondence_none : forall t V,
+    denot_fun t V = None <-> V |/= (PC t).
+Proof.
+  intros.
+  pose proof trace_correspondence_aux t V as (? & ?).
+  split; intros.
+  - destruct (bool_dec (Beval V (PC t)) true) as [? | ?].
+    + apply H0 in e.
+      rewrite H1 in e.
+      exfalso.
+      now apply e.
+    + now apply not_true_is_false in n.
+  - destruct (denot_fun t V) eqn:?; auto.
+    + rewrite H in H1.
+      discriminate.
+      easy.
 Qed.
 
 Type trace_correspondence.

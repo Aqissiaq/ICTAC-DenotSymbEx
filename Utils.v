@@ -107,6 +107,18 @@ Section EnsembleHelpers.
     - destruct H. split; assumption.
   Qed.
 
+  Lemma inverse_union : forall F B1 B2,
+      inverse_image F (Union _ B1 B2) = Union X (inverse_image F B1) (inverse_image F B2).
+  Proof.
+    intros. apply Extensionality_Ensembles. split; intros V H.
+    - inversion H; subst.
+      + now left.
+      + now right.
+    - destruct H.
+      + now left.
+      + now right.
+  Qed.
+
   Lemma inverse_inverse : forall F F' (B: Ensemble X),
       inverse_image F (inverse_image F' B) = inverse_image (fun x => F' (F x)) B.
   Proof.

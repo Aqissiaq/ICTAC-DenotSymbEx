@@ -7,6 +7,7 @@ Syntax.v
 Limits.v
 
 Traces.v
+TraceDL.v
 Programs.v
 Operational.v
 Deterministic.v
