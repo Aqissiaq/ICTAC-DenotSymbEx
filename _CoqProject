@@ -4,7 +4,6 @@ Utils.v
 Expr.v
 Maps.v
 Syntax.v
-Limits.v
 
 Traces.v
 TraceDL.v
