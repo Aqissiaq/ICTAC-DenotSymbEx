@@ -206,4 +206,45 @@ Proof.
       rewrite SOUND1; auto.
 Qed.
 
-(*TODO: Prop 1? *)
+Type diamond_weakest_precond.
+Print Assumptions diamond_weakest_precond.
+
+Type box_weakest_precond.
+Print Assumptions box_weakest_precond.
+
+(* Proposition 1, in 4 parts *)
+(*T1*)
+Fact box_skip_charact: forall φ V,
+    DLeval V <{[TSkip] φ}> = DLeval V φ.
+Proof. easy. Qed.
+
+(*T2*)
+(* here ψ is assumed to be modality-free to reuse comp_subB, but it is not a requirement *)
+Fact box_asgn_charact: forall φ x e V,
+    DLeval V (DLBox (TAsgn x e) (embed φ)) = DLeval V (DLapply (x !-> e ; id_sub) (embed φ)).
+Proof.
+  intros.
+  cbn.
+  rewrite DLapply_embed, 2 DLeval_embed.
+  rewrite <- asgn_sound'.
+  now rewrite comp_subB.
+Qed.
+
+(*T3*)
+Fact box_asrt_charact: forall φ b V,
+    DLeval V (DLBox (TAsrt b) φ) = DLeval V (DLImpl (embed b) φ).
+Proof.
+  intros.
+  cbn.
+  rewrite DLeval_embed.
+  destruct (Beval V b); auto.
+Qed.
+
+(*T4*)
+Fact box_seq_charact: forall φ t1 t2 V,
+    DLeval V (DLBox (TSeq t1 t2) φ) = DLeval V (DLBox t1 (DLBox t2 φ)).
+Proof.
+  intros.
+  cbn.
+  destruct (denot_fun t1 V); auto.
+Qed.
