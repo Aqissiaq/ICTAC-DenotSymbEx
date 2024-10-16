@@ -69,7 +69,7 @@ Proof.
 Qed.
 
 Ltac Sub_spec_unfold p :=
-  let H := fresh in epose proof Sub_spec_correct p as (H&_);
+  let H := fresh in epose proof Sub_spec_correct p (Sub p) as (H&_);
                     specialize (H eq_refl);
                     inv H.
 
@@ -178,7 +178,7 @@ Proof.
 Qed.
 
 Ltac PC_spec_unfold p :=
-  let H := fresh in epose proof PC_spec_correct p as (H&_);
+  let H := fresh in epose proof PC_spec_correct p (PC p) as (H&_);
                     specialize (H eq_refl);
                     inv H.
 

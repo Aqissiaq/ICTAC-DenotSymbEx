@@ -135,7 +135,7 @@ Proof.
     + pose proof trace_correspondence t1 V V0 as (SOUND1 &_).
       destruct (SOUND1 Heqo) as (? & ?).
       destruct (denot_fun t2 V0) as [?V | ] eqn:?; cbn.
-      * pose proof trace_correspondence t2 V0 as (SOUND2 &_).
+      * pose proof trace_correspondence t2 V0 V1 as (SOUND2 &_).
         destruct (SOUND2 Heqo0) as (? & ?).
         specialize (IHt1 ψ V).
         specialize (IHt2 ψ V0).
@@ -180,7 +180,7 @@ Proof.
     + pose proof trace_correspondence t1 V V0 as (SOUND1 &_).
       destruct (SOUND1 Heqo) as (? & ?).
       destruct (denot_fun t2 V0) as [?V | ] eqn:?; cbn.
-      * pose proof trace_correspondence t2 V0 as (SOUND2 &_).
+      * pose proof trace_correspondence t2 V0 V1 as (SOUND2 &_).
         destruct (SOUND2 Heqo0) as (? & ?).
         specialize (IHt1 ψ V).
         specialize (IHt2 ψ V0).

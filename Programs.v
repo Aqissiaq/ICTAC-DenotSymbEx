@@ -91,7 +91,6 @@ Proof.
     now destruct (Beval V b).
   - simpl; intro.
     destruct (denot_fun t1 V); simpl; auto.
-    destruct (denot_fun t2 v); simpl; auto.
 Qed.
 
 Fixpoint n_fold_seq (n:nat) (ts: Ensemble Trc): Ensemble Trc :=
@@ -345,8 +344,7 @@ Proof.
   destruct u,v; unfold PC; cbn; auto;
     try (destruct (trace_denot__S v1) eqn:?, (trace_denot__S v2) eqn:?; cbn; auto);
     destruct (trace_denot__S u1) eqn:?, (trace_denot__S u2) eqn:?; cbn; auto.
-  - pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
-    specialize (H eq_refl).
+  - Sub_spec_unfold  (TSeq u1 u2).
     inv H.
     apply Sub_spec_correct in H3, H4.
     unfold Sub in H3, H4.
@@ -354,21 +352,18 @@ Proof.
     rewrite Heqp0 in H4.
     now simpl in *; subst.
 
-  - pose proof Sub_spec_correct (TSeq u1 u2) as (?&_).
-    specialize (H eq_refl).
+  - Sub_spec_unfold (TSeq u1 u2).
     inv H.
     apply Sub_spec_correct in H3, H4.
     unfold Sub in H3, H4.
     rewrite Heqp1 in H3.
     rewrite Heqp2 in H4.
 
-    pose proof Sub_spec_correct (TSeq v1 v2) as (?&_).
-    specialize (H0 eq_refl).
+    Sub_spec_unfold (TSeq v1 v2).
     inv H0.
     apply Sub_spec_correct in H7, H8.
     unfold Sub in H7, H8.
-    rewrite Heqp in H7.
-    rewrite Heqp0 in H8.
+    rewrite Heqp in *.
     now simpl in *; subst.
 Qed.
 
