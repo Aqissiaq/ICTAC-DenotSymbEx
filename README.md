@@ -18,7 +18,7 @@ The development follows the paper, split into files:
 - [Utils](./Utils.v) contains various lemmas about sets, relations and other useful constructions
 
 ## Build
-The included Makefile (created for Coq 8.16.1) should allow just
+The included Makefile (created for Coq 8.19.2) should allow just
 ```sh
 make
 ```
