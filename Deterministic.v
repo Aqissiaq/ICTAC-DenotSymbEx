@@ -321,10 +321,11 @@ Proof.
       now rewrite HD, HD0.
     - destruct (not_eq _ _ H1).
       + destruct (Nat.le_gt_cases i l); try lia.
-        destruct (Lt.le_lt_or_eq_stt _ _ H4);
+
+        destruct (proj1 (Nat.lt_eq_cases i l) H4);
           [ | rewrite 2 nth_overflow; auto; lia].
         destruct (Nat.le_gt_cases i m); try lia.
-        destruct (Lt.le_lt_or_eq_stt _ _ H6).
+        destruct (proj1 (Nat.lt_eq_cases i m) H6).
         * pose proof H0 i H7 as (_&?).
           pose proof H2 i H5 as (_&?).
           rewrite IHi in H8; auto.
@@ -334,10 +335,10 @@ Proof.
           pose proof H2 m H3 as (?&_).
           rewrite <- IHi in H7; lia.
       + destruct (Nat.le_gt_cases i m); try lia.
-        destruct (Lt.le_lt_or_eq_stt _ _ H4);
+        destruct (proj1 (Nat.lt_eq_cases _ _) H4);
             [ | rewrite 2 nth_overflow; auto; lia].
           destruct (Nat.le_gt_cases i l); try lia.
-          destruct (Lt.le_lt_or_eq_stt _ _ H6).
+          destruct ((proj1 (Nat.lt_eq_cases _ _) H6)).
              * pose proof H0 i H5 as (_&?).
                 pose proof H2 i H7 as (_&?).
                 rewrite IHi in H8; auto.

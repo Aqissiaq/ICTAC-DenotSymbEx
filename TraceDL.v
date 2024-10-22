@@ -248,3 +248,7 @@ Proof.
   cbn.
   destruct (denot_fun t1 V); auto.
 Qed.
+
+Definition post_condition (t:Trc) (P Q:DLexpr) := forall V, DLeval V (DLImpl P (DLBox t Q)) = true.
+Definition strongest_post_condition (t:Trc) (P Q:DLexpr) :=
+  forall R, post_condition t P R -> forall V, DLeval V (DLImpl Q R) = true.
