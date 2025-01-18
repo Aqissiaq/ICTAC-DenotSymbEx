@@ -154,7 +154,7 @@ Proof.
   split; auto.
 Qed.
 
-(* Lemma 11 *)
+(* Proposition 2 *)
 Lemma canonical_SE_step: forall p q σ σ' φ φ',
     (p, σ, φ) ->s (q, σ', φ') -> exists σc φc,
         (p, id_sub, BTrue) ->s (q, σc, φc)
@@ -237,6 +237,7 @@ Proof.
     (* we need *equal* path conditions, but hypothesis only gives equivalent *)
 Abort.
 
+(* Lemma 11 *)
 Lemma canonical_soundness_step: forall p q σ φ σ' φ',
     (p, id_sub, BTrue) ->s (q, σ, φ) ->
     In _ (denot__S q) (σ', φ') ->
